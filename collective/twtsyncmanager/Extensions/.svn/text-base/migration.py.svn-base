@@ -1,0 +1,16 @@
+"""XML migration script by David Jonas
+This script migrates XML files into Plone Objects
+
+Supposed to be run as an external method (Instructions: http://plone.org/documentation/kb/create-and-use-an-external-method ) 
+"""
+
+def migrate(self, xmlFilePath, typeToCreate, folder):
+    from Products.MyExtensions.migrator import XMLMigrator
+    
+    #Create the migrator
+    migrator = XMLMigrator(self, xmlFilePath, typeToCreate, folder)
+    
+    #Finally migrate
+    print("=== Starting Migration. ===")
+    migrator.startMigration()
+    return "=== Migration sucessfull. Created %d items on folder %s (%d errors and %d skipped) ==="%(migrator.created, migrator.folderPath, migrator.errors, migrator.skipped)
