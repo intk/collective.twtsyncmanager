@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 
 #
-# Ticket works sync mechanism by Andre Goncalves
+# Ticketworks API sync mechanism by Andre Goncalves
 #
 import plone.api
 import transaction
 
+# Plone dependencies
 from zope.schema.interfaces import ITextLine, ITuple, IBool
 from plone.app.textfield.interfaces import IRichText
 from plone.app.textfield.value import RichTextValue
@@ -14,34 +15,74 @@ from zope.schema import getFieldsInOrder
 from plone.event.interfaces import IEventAccessor
 from datetime import datetime
 
+# Product dependencies
 from collective.behavior.performance.behavior import IPerformance
-
 from .error import RequestError, RequestSetupError, ResponseHandlingError, PerformanceNotFoundError, UnkownError
 
 
 class SyncManager(object):
-
     #
-    # INIT
+    # Init methods 
     # 
-
     def __init__(self, options):
         self.options = options
         self.twt_api = self.options['api']
         self.CORE = self.options['core']
         self.fields_schema = getFieldsInOrder(IPerformance)
     #
-    # UTILS
+    # Global methods
     #
     def logger(self, message, err):
-        ## log into CSV
+        ## TODO: log into CSV
+        ## TODO: log into Sentry
         print "%s. Exception message: %s" %(message, err)
 
     #
-    # PARSE JSON
+    # CRUD operations
     #
+    def update_performance(self, performance_id):
+        try:
+            resp = self.twt_api.get_performance_availability(performance_id)
+            if 'performance' in resp:
+                performance_data = resp['performance']
+                performance = self.find_performance(performance_id)
+                updated_performance = self.update_all_fields(performance, performance_data)
+                return updated_performance
+            else:
+                self.logger("[Error] performance is not found in the APIs response. ID: %s" %(performance_id), "Invalid API response.")
+                return None
+        except Exception as err:
+            self.logger("[Error] Cannot update the performance ID: %s" %(performance_id), err)
+            raise
+
+    def unpublish_performance(self, performance_id):
+        ## TODO
+        pass
+
+    def delete_performance(self, performance_id):
+        ## TODO
+        pass
+
+    def create_performance(self, performance_data):
+        ## TODO
+        pass
+
+    def get_all_events(self, date_from):
+        ## TODO
+        pass
+
+    #
+    # CRUS utils
+    # 
+    def find_performance(self, performance_id):
+        result = plone.api.content.find(performance_id=performance_id)
+        if result:
+            return result[0].getObject()
+        else:
+            raise PerformanceNotFoundError("Performance with ID '%s' is not found in Plone" %(performance_id))
+
     def match(self, field):
-        # find match in the core
+        # Find match in the core
         if field in self.CORE.keys():
             if self.CORE[field]:
                 return self.CORE[field]
@@ -52,22 +93,39 @@ class SyncManager(object):
             # log field not match
             self.logger("[Error] API field '%s' does not exist in the fields mapping" %(field), "Field not found in mapping.")
             return False
-    #
-    # DATA
-    #
-    def create_performance(self, performance_data):
-        pass
 
-    def set_availability(self, performance_brain, new_availability):
-        pass
+    def update_field(self, performance, fieldname, fieldvalue):
+        plonefield_match = self.match(fieldname)
+        if plonefield_match:
+            try:
+                if not hasattr(performance, plonefield_match):
+                    self.logger("[Error] Plone field '%s' does not exist" %(plonefield_match), "Plone field not found")
+                    return None
 
-    def get_all_events(self, date_from):
-        pass
+                if plonefield_match:
+                    transform_value = self.transform_special_fields(performance, fieldname, fieldvalue)
+                    if transform_value:
+                        return transform_value
+                    else:
+                        setattr(performance, plonefield_match, self.safe_value(fieldvalue))
+                        return fieldvalue
+                else:
+                    return False
+            except Exception as err:
+                self.logger("[Error] Exception while syncing the API field %s" %(fieldname), err)
+                return None
+        else:
+            return None
+
+    def update_all_fields(self, performance, performance_data):
+        self.clean_all_fields(performance)
+        supdated_fields = [(self.update_field(performance, field, performance_data[field]), field) for field in performance_data.keys()]
+        performance = self.validate_performance_data(performance, performance_data)
+        return performance
 
     #
-    # Sync one performance 
+    # Sanitising/validation methods
     #
-
     def safe_value(self, fieldvalue):
         if isinstance(fieldvalue, int):
             fieldvalue_safe = "%s" %(fieldvalue)
@@ -117,83 +175,22 @@ class SyncManager(object):
 
         return True
 
-
     def validate_performance_data(self, performance, performance_data):
         self.validate_dates(performance, performance_data)
         performance.reindexObject()
         transaction.get().commit()
         return performance
 
-    def update_field(self, performance, fieldname, fieldvalue):
-        plonefield_match = self.match(fieldname)
-        if plonefield_match:
-            try:
-                if not hasattr(performance, plonefield_match):
-                    self.logger("[Error] Plone field '%s' does not exist" %(plonefield_match), "Plone field not found")
-                    return None
-
-                if plonefield_match:
-                    transform_value = self.transform_special_fields(performance, fieldname, fieldvalue)
-                    if transform_value:
-                        return transform_value
-                    else:
-                        setattr(performance, plonefield_match, self.safe_value(fieldvalue))
-                        return fieldvalue
-                else:
-                    return False
-            except Exception as err:
-                self.logger("[Error] Exception while syncing the API field %s" %(fieldname), err)
-                return None
-        else:
-            return None
-
-    def update_all_fields(self, performance, performance_data):
-        self.clean_all_fields(performance)
-        supdated_fields = [(self.update_field(performance, field, performance_data[field]), field) for field in performance_data.keys()]
-        performance = self.validate_performance_data(performance, performance_data)
-        return performance
-
-    def find_performance(self, performance_id):
-        result = plone.api.content.find(performance_id=performance_id)
-        if result:
-            return result[0].getObject()
-        else:
-            raise PerformanceNotFoundError("Performance with ID '%s' is not found in Plone" %(performance_id))
-
-
-    def update_performance(self, performance_id):
-        try:
-            resp = self.twt_api.get_performance_availability(performance_id)
-            if 'performance' in resp:
-                performance_data = resp['performance']
-                performance = self.find_performance(performance_id)
-                updated_performance = self.update_all_fields(performance, performance_data)
-                return updated_performance
-            else:
-                self.logger("[Error] performance is not found in the APIs response. ID: %s" %(performance_id), "Invalid API response.")
-                return None
-        except Exception as err:
-            self.logger("[Error] Cannot update the performance ID: %s" %(performance_id), err)
-            raise
-        
-    def unpublish_performance(self, performance_id):
-        pass
-
-    def delete_performance(self, performance_id):
-        pass
-
     #
     # Transform special fields
+    # Special methods
     #
-
-
     def transform_special_fields(self, performance, fieldname, fieldvalue):
         special_field_handler = self.get_special_fields_handlers(fieldname)
         if special_field_handler:
             special_field_value = special_field_handler(performance, fieldname, fieldvalue)
             return special_field_value
         return False
-
 
     def get_special_fields_handlers(self, fieldname):
         SPECIAL_FIELDS_HANDLERS = {
@@ -274,8 +271,3 @@ class SyncManager(object):
             return fieldvalue
             
         return fieldvalue
-
-    
-
-
-    
