@@ -7,6 +7,7 @@
 *.svn
 # dirs
 .svn
+.eggs/
 bin/
 buildout-cache/
 develop-eggs/
