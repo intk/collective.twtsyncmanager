@@ -37,6 +37,7 @@ def generate_querystring(params):
 
 
 class APIConnection(object):
+
     #
     # Local definitions to the API connection
     #
@@ -87,12 +88,18 @@ class APIConnection(object):
         return self.api_settings[self.api_mode]['api_key']
 
     def get_performance_list_by_date(date_from, date_until, season):
+        ## TODO
         return []
 
     def get_performance_list_by_season(season):
+        ## TODO
         return []
 
     def get_performance_availability(self, performance_id):
+        # 
+        # Request the performance availability from the Ticketworks API
+        # Requires: performance_id
+        #
         params = {"id": performance_id}
         response = self.perform_api_call(self.HTTP_METHOD, endpoint_type='availability', params=params)
         return response
