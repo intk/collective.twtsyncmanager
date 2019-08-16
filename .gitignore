@@ -4,7 +4,9 @@
 *.mo
 *.py?
 *.swp
+*.svn
 # dirs
+.svn
 bin/
 buildout-cache/
 develop-eggs/
