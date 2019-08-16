@@ -24,8 +24,19 @@ class RequestError(Error):
     """Errors while preparing or performing an API request."""
     pass
 
+class UnkownError(Error):
+    """Errors while preparing or performing an API request."""
+    pass
 
 class RequestSetupError(RequestError):
     """Errors while preparing an API request."""
     pass
 
+class ResponseHandlingError(Error):
+    """Errors related to handling the response from the API."""
+    pass
+
+
+class PerformanceNotFoundError(Error):
+    """Errors related to handling the response from the API."""
+    pass

@@ -2,19 +2,30 @@
 # -*- coding: utf-8 -*-
 
 CORE = {
-	"title": "title",
+	"title": "performance_title",
 	"id": "performance_id",
 	"season": "season",
 	"eventType": "eventType",
 	"eventGenre": "subjects",
-	"title": "performance_title",
-	"subtitle": "description",
+	"subtitle": "subtitle",
 	"tags": "tags",
 	"facility": "location",
 	"performanceStatus": "performanceStatus",
-	""
-
-
-
-
+	"onsale": "onsale",
+	"startOnlineSalesDate": "startOnlineSalesDate",
+	"endOnlineSalesDate":"endOnlineSalesDate",
+	"statusMessage": "statusMessage",
+	"percentageTaken": "percentageTaken",
+	"startDateTime": "start",
+	"endDateTime": "end",
+	"code": "",
+	"facilityCode": "",
+	"event": "",
+	"end": "",
+	"start": "",
+	"satellite":"",
+	"facilityAddressLines":"",
+	"date":"",
+	"ranks":"",
+	"arrangements": ""
 }
