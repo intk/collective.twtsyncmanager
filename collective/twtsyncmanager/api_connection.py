@@ -3,21 +3,25 @@
 
 
 #
-# Ticket works sync mechanism by Andre Goncalves
+# Ticketworks API sync mechanism by Andre Goncalves
 #
 
+# Global dependencies
 import re
 import requests
+import sys
+
 try:
     from urllib.parse import urlencode
 except ImportError:
     # support python 2
     from urllib import urlencode
 
+# Product dependencies
 from .error import RequestError, RequestSetupError, ResponseHandlingError, PerformanceNotFoundError, UnkownError
-import sys
 
 
+# Global method
 def generate_querystring(params):
     """
     Generate a querystring
@@ -33,7 +37,9 @@ def generate_querystring(params):
 
 
 class APIConnection(object):
-
+    #
+    # Local definitions to the API connection
+    #
     ENVIRONMENTS = ['test', 'prod']
     URL_REGEX = re.compile(
         r'^(?:http|ftp)s?://' # http:// or https://
@@ -54,6 +60,9 @@ class APIConnection(object):
         "availability": "performanceAvailability"
     }
 
+    #
+    # Initialisation methods
+    #
     def __init__(self, api_settings):
         if api_settings and isinstance(api_settings, dict):
             self.api_settings = self.validate_settings(api_settings)
@@ -61,13 +70,36 @@ class APIConnection(object):
             self.raise_request_setup_error("Required API settings are not found or have an invalid format.")
 
         self.api_mode = api_settings['api_mode']
-
         # TODO: endpoints should be validated
+
+    #
+    # CRUD operations
+    #
+    def set_api_mode(self, api_mode):
+        api_mode = self.validate_api_mode(api_mode)
+        self.api_mode = api_mode
+        return self.api_mode
+
+    def get_api_url(self):
+        return self.api_settings[self.api_mode]['url']
+
+    def get_api_key(self):
+        return self.api_settings[self.api_mode]['api_key']
+
+    def get_performance_list_by_date(date_from, date_until, season):
+        return []
+
+    def get_performance_list_by_season(season):
+        return []
+
+    def get_performance_availability(self, performance_id):
+        params = {"id": performance_id}
+        response = self.perform_api_call(self.HTTP_METHOD, endpoint_type='availability', params=params)
+        return response
 
     # 
     # Error handling
     #
-
     def _raise_request_setup_error(self, message):
         raise RequestSetupError(message)
 
@@ -101,7 +133,6 @@ class APIConnection(object):
     # 
     # Validaton methods
     #
-
     def validate_settings(self, api_settings):
         for environment in self.ENVIRONMENTS:
             if environment not in api_settings:
@@ -167,9 +198,8 @@ class APIConnection(object):
         return params
 
     # 
-    # CALL METHODS
+    # API call methods
     #
-
     def _format_request_data(self, endpoint_type, params):
         params['key'] = self.api_settings[self.api_mode]['api_key']
         querystring = generate_querystring(params)
@@ -234,29 +264,5 @@ class APIConnection(object):
                     "(status code: {status}): '{response}'.".format(
                         status=resp.status_code, response=resp.text))
         return result
-    #
-    # DATA METHODS
-    #
-
-    def set_api_mode(self, api_mode):
-        api_mode = self.validate_api_mode(api_mode)
-        self.api_mode = api_mode
-        return self.api_mode
-
-    def get_api_url(self):
-        return self.api_settings[self.api_mode]['url']
-
-    def get_api_key(self):
-        return self.api_settings[self.api_mode]['api_key']
-
-    def get_performance_list_by_date(date_from, date_until, season):
-        return []
-
-    def get_performance_list_by_season(season):
-        return []
-
-    def get_performance_availability(self, performance_id):
-        params = {"id": performance_id}
-        response = self.perform_api_call(self.HTTP_METHOD, endpoint_type='availability', params=params)
-        return response
+    
 
