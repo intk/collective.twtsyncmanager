@@ -1,4 +1,0 @@
-recursive-include docs *
-recursive-include Products *
-include *
-global-exclude *pyc
