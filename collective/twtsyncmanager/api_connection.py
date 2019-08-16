@@ -260,36 +260,3 @@ class APIConnection(object):
         response = self.perform_api_call(self.HTTP_METHOD, endpoint_type='availability', params=params)
         return response
 
-
-"""if __name__ == '__main__':
-    api_settings = {
-        'test': {
-            'url': "https://hetpark.tst3.ticketworks.nl/mtTicketingAPI",
-            'api_key': "d437c0cb-34ab-480f-851f-aba9a"
-        },
-        'prod': {
-            'url': "https://hetpark.tst3.ticketworks.nl/mtTicketingAPI",
-            'api_key': "d437c0cb-34ab-480f-851f-aba9a"
-        },
-        'api_mode': 'test'
-    }
-
-    api_connection = APIConnection(api_settings)
-
-
-    # Test get performance availability
-    test_performance_id = "1409"
-    performance_data = api_connection.get_performance_availability(test_performance_id)
-    print performance_data
-
-    ## TODO
-    # Test get list of performances by date
-    # Test get list of performances by season"""
-
-
-
-
-
-
-
-

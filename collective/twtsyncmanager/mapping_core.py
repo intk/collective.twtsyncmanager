@@ -26,6 +26,6 @@ CORE = {
 	"satellite":"",
 	"facilityAddressLines":"",
 	"date":"",
-	"ranks":"",
+	"ranks":"price",
 	"arrangements": ""
 }

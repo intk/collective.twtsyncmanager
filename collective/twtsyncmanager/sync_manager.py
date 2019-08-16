@@ -82,7 +82,7 @@ class SyncManager(object):
             if fieldname != 'performance_id':
                 self.clean_field(performance, fieldname, field)
             
-        # extra fields
+        # extra fields that are not in the behavior
         # location
         setattr(performance, 'location', "")
 
@@ -103,7 +103,23 @@ class SyncManager(object):
 
         return performance
 
+    def validate_dates(self, performance, performance_data):
+        startDateTime = performance_data.get('startDateTime', '')
+        endDateTime = performance_data.get('endDateTime', '')
+
+        if startDateTime and not endDateTime:
+            performance_date_fields = IEventAccessor(performance)
+            performance_date_fields.end = performance_date_fields.start
+            return True
+        if not startDateTime and not endDateTime:
+            self.logger("[Error] There are no dates the performance. ", "Performance dates cannot be found.")
+            return False
+
+        return True
+
+
     def validate_performance_data(self, performance, performance_data):
+        self.validate_dates(performance, performance_data)
         performance.reindexObject()
         transaction.get().commit()
         return performance
@@ -138,7 +154,6 @@ class SyncManager(object):
         return performance
 
     def find_performance(self, performance_id):
-
         result = plone.api.content.find(performance_id=performance_id)
         if result:
             return result[0].getObject()
@@ -170,6 +185,31 @@ class SyncManager(object):
     #
     # Transform special fields
     #
+
+
+    def transform_special_fields(self, performance, fieldname, fieldvalue):
+        special_field_handler = self.get_special_fields_handlers(fieldname)
+        if special_field_handler:
+            special_field_value = special_field_handler(performance, fieldname, fieldvalue)
+            return special_field_value
+        return False
+
+
+    def get_special_fields_handlers(self, fieldname):
+        SPECIAL_FIELDS_HANDLERS = {
+            "title": self._transform_performance_title,
+            "eventGenre": self._transform_event_genre,
+            "startDateTime": self._transform_start_date,
+            "endDateTime": self._transform_end_date,
+            "tags": self._transform_tags,
+            "ranks": self._transform_ranks
+        }
+
+        if fieldname in SPECIAL_FIELDS_HANDLERS:
+            return SPECIAL_FIELDS_HANDLERS[fieldname]
+        else:
+            return None
+
     def _transform_performance_title(self, performance, fieldname, fieldvalue):
         setattr(performance, 'performance_title', fieldvalue)
         return fieldvalue
@@ -193,33 +233,49 @@ class SyncManager(object):
     def _transform_tags(self, performance, fieldname, fieldvalue):
         return fieldvalue
 
+    def _transform_ranks_generate_prices(self, rank):
+        prices = rank.get('prices', '')
+        final_value = ""
+
+        if prices:
+            if len(prices) > 1:
+                for price in prices:
+                    priceTypeDescription = price['priceTypeDescription']
+                    price_value = price['price']
+                    final_value += "<li>%s %s</li>" %(priceTypeDescription, price_value)
+                return final_value
+            elif len(prices) == 1:
+                price = prices[0]
+                price_value = price['price']
+                final_value += "<li>%s</li>" %(price_value)
+                return final_value
+            else:
+                return ""
+        else:
+            return ""
+
     def _transform_ranks(self, performance, fieldname, fieldvalue):
 
-        
+        html_value = ""
 
+        if len(fieldvalue) > 1:
+            for rank in fieldvalue:
+                rankDescription = rank['rankDescription']
+                prices = self._transform_ranks_generate_prices(rank)
+                html_value += "<p>%s</p><ul>%s</ul>" %(rankDescription, prices)
+            setattr(performance, 'price', html_value)
+
+        elif len(fieldvalue) == 1:
+            rank = fieldvalue[0]
+            prices = self._transform_ranks_generate_prices(rank)
+            html_value += "<ul>%s</ul>" %(prices)
+            setattr(performance, 'price', html_value)
+        else:
+            return fieldvalue
+            
         return fieldvalue
 
-    def get_special_fields_handlers(self, fieldname):
-        SPECIAL_FIELDS_HANDLERS = {
-            "title": self._transform_performance_title,
-            "eventGenre": self._transform_event_genre,
-            "startDateTime": self._transform_start_date,
-            "endDateTime": self._transform_end_date,
-            "tags": self._transform_tags,
-            "ranks": self._transform_ranks
-        }
-
-        if fieldname in SPECIAL_FIELDS_HANDLERS:
-            return SPECIAL_FIELDS_HANDLERS[fieldname]
-        else:
-            return None
-
-    def transform_special_fields(self, performance, fieldname, fieldvalue):
-        special_field_handler = self.get_special_fields_handlers(fieldname)
-        if special_field_handler:
-            special_field_value = special_field_handler(performance, fieldname, fieldvalue)
-            return special_field_value
-        return False
+    
 
 
     
