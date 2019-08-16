@@ -1,0 +1,35 @@
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/448/Products.MyExtentions/trunk/Products/MyExtensions
+END
+configure.zcml
+K 25
+svn:wc:ra_dav:version-url
+V 82
+/svn/!svn/ver/448/Products.MyExtentions/trunk/Products/MyExtensions/configure.zcml
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/svn/!svn/ver/448/Products.MyExtentions/trunk/Products/MyExtensions/__init__.py
+END
+tests.py
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/!svn/ver/448/Products.MyExtentions/trunk/Products/MyExtensions/tests.py
+END
+migrator.py
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/svn/!svn/ver/481/Products.MyExtentions/trunk/Products/MyExtensions/migrator.py
+END
+arnolfini_migrator.py
+K 25
+svn:wc:ra_dav:version-url
+V 89
+/svn/!svn/ver/481/Products.MyExtentions/trunk/Products/MyExtensions/arnolfini_migrator.py
+END

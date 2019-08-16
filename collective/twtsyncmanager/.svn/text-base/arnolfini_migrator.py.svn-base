@@ -1,0 +1,556 @@
+"""XML migration script by David Jonas
+This script migrates XML files into Plone Objects
+
+Supposed to be run as an external method trhough the boilerplate script migration.py 
+"""
+import urllib2
+import AccessControl
+import transaction
+import time
+import sys
+import csv
+from DateTime import DateTime
+import datetime
+from plone.i18n.normalizer import idnormalizer
+from Testing.makerequest import makerequest
+from Products.CMFCore.utils import getToolByName
+from Acquisition import aq_inner
+try:
+    from collective.contentleadimage.config import IMAGE_FIELD_NAME
+    from collective.contentleadimage.config import IMAGE_CAPTION_FIELD_NAME
+    from collective.contentleadimage.interfaces import ILeadImageable
+    import collective.contentleadimage
+    LEADIMAGE_EXISTS = True
+except ImportException:
+    LEADIMAGE_EXISTS = False
+    
+# Folder where the images are (Do not forget to add a trailing slash)
+IMAGE_FOLDER = "/var/plone4_/zeocluster/src/Products.MyExtensions/Products/MyExtensions/files/arnolfini/Images/"
+PDF_FOLDER = "/var/plone4_/zeocluster/src/Products.MyExtensions/Products/MyExtensions/files/arnolfini/PDF/"
+
+class EventItem:
+    """Class to store an Object from the csv file"""
+    def __init__(self):
+        self.id = None #gets the id
+        self.IID = None #gets the internal ID
+        self.title = "" #gets the name
+        self.description = "" #gets the description / description source? / Weblink 
+        self.tags = [] #gets the event type / event sub type / event type label
+        self.startDate = None
+        self.endDate = None
+        self.assetsFile = "/var/plone4_/zeocluster/src/Products.MyExtensions/Products/MyExtensions/Extensions/arnolfini_event_assets.csv" 
+        self.locationsFile = "/var/plone4_/zeocluster/src/Products.MyExtensions/Products/MyExtensions/Extensions/arnolfini_events_locations.csv"
+        
+    
+    @property
+    def assets(self):
+        """
+        Check assets file and parse files for this event.
+        Add the files here or outside the class?
+        Check if the file exists?
+        """
+        result = []
+        assetsDoc = csv.DictReader(open(self.assetsFile, 'rb'))
+        for row in assetsDoc:
+            if row["Event lID"] == self.id:
+                result.append("%sEvents/%s.jpg"%(IMAGE_FOLDER, row["Asset ID"]))
+        return result
+        
+    @property
+    def location(self):
+        """
+        Check events_locations file and Capture the location name for this event
+        """
+        result = ""
+        locationsDoc = csv.DictReader(open(self.locationsFile, 'rb'))
+        for row in locationsDoc:
+            if row["Event lID"] == self.id:
+                result = row["Location Name"]
+                return result
+    
+class PersonItem:
+    """Class to store an Object from the csv file"""
+    def __init__(self):
+        self.id = None #gets the id
+        self.IID = None #gets the internal ID
+        self.name = "" #gets the name
+        self.description = "" #gets the description 
+        self.body = "" #Gets a mix of profile / bio / webpage
+        self.tags = [] 
+        self.born = None
+        self.died = None
+        
+class OrganizationItem:
+    """Class to store an Object from the csv file"""
+    def __init__(self):
+        self.id = None #gets the id
+        self.IID = None #gets the internal ID
+        self.name = "" #gets the name
+        self.description = "" #gets the description 
+        self.body = "" #Gets a mix of profile / bio / webpage
+        self.tags = [] 
+        self.born = None
+        self.died = None
+        
+
+class CSVMigrator:
+    """ Gets an CSV file, parses it and creates the content in the chosen plone instance """
+ 
+    def __init__(self, portal, csvFilePath, typeToCreate, folder):
+        """Constructor that gets access to both the parsed file and the chosen portal"""
+        print("INITIALIZING CONTENT MIGRATOR")
+        #check if portal exists
+        self.portal = portal
+        
+        #Parse the CSV file
+        self.csvDoc = csv.DictReader(open(csvFilePath, 'rb'))
+        
+        #Set the migration mode
+        self.typeToCreate = typeToCreate
+        
+        #Save the path to the folder to migrate to
+        self.folderPath = folder.split("/")
+        
+        #Initialize the counters for the log
+        self.errors = 0 #Number of errors - failed to create an item
+        self.created = 0 #Number of sucessfully created items
+        self.skipped = 0 #Number of items skipped because another item with the same id already exists on that folder.
+    
+        #DEBUG
+        self.fields = []
+    
+    
+    def cleanUp(self):
+        #No cleanup necessary
+        return
+    
+    def getContainer(self):
+        #if there is no folder info, fail.
+        if len(self.folderPath) == 0:
+            print("Folder check failed")
+            return None
+        
+        #Set the container to the root object of the portal
+        container = self.portal
+        
+        #Navigate the folders creating them if necessary
+        for folder in self.folderPath:
+            if hasattr(container, folder):
+                container = container[folder]
+            else:
+                print ("== Chosen folder " + folder + " does not exist. Creating new folder ==")
+                container.invokeFactory(type_name="Folder", id=folder, title="migration of type: " + self.typeToCreate)
+                container = container[folder]
+            
+        return container
+
+    def getOrCreateFolder(self, container, folderId, publish):
+        #Get a folder if it exists or create it if it doesn't
+        if folderId != "":
+            try:
+                if hasattr(container, folderId):
+                        container = container[folderId]
+                else:
+                    print ("== Creating new folder ==")
+                    container.invokeFactory(type_name="Folder", id=folderId, title=folderId)
+                    container = container[folderId]
+                    
+                    #publish the folder if needed
+                    if publish:
+                        container.portal_workflow.doActionFor(container, "publish", comment="content automatically published by migrationScript")
+                    
+                return container
+            except:
+                print("Folder %s could not be created: %s"%(folderId, sys.exc_info()[1]))
+                return None
+        else:
+            return None
+            
+
+    def addImage(self, container, image):
+        try:
+            filename = image.split("/")[-1:][0]
+            dirtyId = filename
+            result = False
+            transaction.begin()
+        
+            id = idnormalizer.normalize(unicode(dirtyId, "utf-8"))
+            
+            #if not hasattr(container, str(id)):                                             #The processForm changes the id to the fileneame in lower case
+            if not hasattr(container, filename.lower()): 
+                #import pdb; pdb.set_trace()
+                print "Adding a new image: %s"%filename
+                container.invokeFactory(type_name="Image", id=id, title=filename)
+            else:
+                print "Image %s already exists, skipping"%filename
+                return True
+            
+            item = container[str(id)]
+            
+            imageFile = open(image, "r")
+            imageData = imageFile.read()
+            item.edit(file=imageData)
+            imageFile.close()
+            
+            #import pdb; pdb.set_trace()
+            item.processForm()
+             
+            transaction.commit()
+            result = True
+            return result
+        except:
+            transaction.abort()
+            print "Unexpected error on addImage: ", sys.exc_info()[1] 
+            return False
+
+    def addLeadImage(self, item, image):
+        #set the lead image if necessary and if lead image product is installed
+        if LEADIMAGE_EXISTS and image != "":
+            #download and create the image
+            try:
+                imageFile = urllib2.urlopen(image)
+                imageData = imageFile.read()
+                urlSplit = image.split("/")
+                filename = urlSplit[len(urlSplit)-1]
+                
+                #add the image as leadImage
+                if ILeadImageable.providedBy(item):
+                    field = aq_inner(item).getField(IMAGE_FIELD_NAME)
+                    field.set(item, imageData, filename=filename)
+                else:
+                    print("Item type does not accept leadImage")
+                
+                #release the image file
+                imageFile.close()
+                return
+            except:
+                print "LeadImage URL not available. LeadImage not created because: (" + image + ")", sys.exc_info()[1]
+                return
+            
+    def addLeadImageCaption(self, item, caption):
+        #set the caption if necessary and if lead image product is installed
+        if LEADIMAGE_EXISTS and caption != "":
+            #add the caption
+            try:
+                if ILeadImageable.providedBy(item):
+                    field = aq_inner(item).getField(IMAGE_CAPTION_FIELD_NAME) 
+                    field.set(item, caption)
+                else:
+                    print("Item type does not accept leadImage therefore captions will be ignored")
+            except:
+                print "Error adding leadImage caption: ", sys.exc_info()[1]
+        return
+
+    def createEvent(self, obj):
+        transaction.begin()
+        container = self.getContainer()
+        id = obj.id
+        result = False
+        
+        try:
+            if hasattr(container, id) and id != "":
+                print ("Event %s already exists."%obj.title)
+                self.skipped = self.skipped + 1
+                print("Skipped item: %s"%id)
+                return result
+                
+            print "NEW EVENT FOUND. ADDING: %s"%obj.title
+            container.invokeFactory(
+                type_name="Media Event",
+                id=id,
+                title=obj.title,
+                startDate = obj.startDate,
+                endDate = obj.endDate,
+                )
+            
+            #get the Event after creating
+            item = container[id]
+            
+            #set the body
+            item.setText(obj.description)
+            
+            #Add tags to Keywords/Categories
+            item.setSubject(obj.tags)
+            
+            #Add location
+            if obj.location != "":
+                item.location = obj.location
+        
+            #finalize
+            item.processForm()
+            
+            #publish
+            #item.portal_workflow.doActionFor(item, "publish", comment="Content automatically published by migrationScript")
+            
+            # Commit transaction
+            transaction.commit()
+            
+            #Add Images to the event
+            for image in obj.assets:
+                print "Adding image %s: "%image
+                self.addImage(item, image)
+            
+            result = True
+            self.created = self.created + 1
+            print("== Page created ==")
+            
+        except:
+            self.errors = self.errors + 1
+            print "Unexpected error on createPage (" +obj.title+ "):", sys.exc_info()[1]
+            transaction.abort()
+            return result
+        
+        if not result:
+            self.skipped = self.skipped + 1
+            print("Skipped item: " + obj.title)
+        return result
+
+    def createPerson(self, obj):
+        transaction.begin()
+        container = self.getContainer()
+        id = obj.id
+        result = False
+        
+        try:
+            if hasattr(container, id) and id != "":
+                print ("Person %s already exists."%obj.name)
+                self.skipped = self.skipped + 1
+                print("Skipped item: %s"%id)
+                return result
+                
+            print "NEW PERSON FOUND. ADDING: %s"%obj.name
+            container.invokeFactory(
+                type_name="Person",
+                id=id,
+                title=obj.name,
+                description=obj.description
+                )
+            
+            #get the Event after creating
+            item = container[id]
+            
+            #set the body
+            item.setText(obj.body)
+            
+            #set the dates
+            item.born = obj.born
+            item.died = obj.died
+            
+            #Add tags to Keywords/Categories
+            item.setSubject(obj.tags)
+        
+            #finalize
+            item.processForm()
+            
+            #publish
+            #item.portal_workflow.doActionFor(item, "publish", comment="Content automatically published by migrationScript")
+            
+            # Commit transaction
+            transaction.commit()
+            
+            result = True
+            self.created = self.created + 1
+            print("== Person created ==")
+            
+        except:
+            self.errors = self.errors + 1
+            print "Unexpected error on createPerson (" +obj.name+ "):", sys.exc_info()[1]
+            transaction.abort()
+            return result
+        
+        if not result:
+            self.skipped = self.skipped + 1
+            print("Skipped item: " + obj.name)
+        return result
+    
+    def createOrganization(self, obj):
+        transaction.begin()
+        container = self.getContainer()
+        id = obj.id
+        result = False
+        
+        try:
+            if hasattr(container, id) and id != "":
+                print ("Organization %s already exists."%obj.name)
+                self.skipped = self.skipped + 1
+                print("Skipped item: %s"%id)
+                return result
+                
+            print "NEW ORGANIZATION FOUND. ADDING: %s"%obj.name
+            container.invokeFactory(
+                type_name="Organization",
+                id=id,
+                title=obj.name,
+                description=obj.description,
+                )
+            
+            #get the Event after creating
+            item = container[id]
+            
+            #set the body
+            item.setText(obj.body)
+            
+            #set the dates
+            item.startDate = obj.born
+            item.endDate = obj.died
+            
+            #Add tags to Keywords/Categories
+            item.setSubject(obj.tags)
+        
+            #finalize
+            item.processForm()
+            
+            #publish
+            #item.portal_workflow.doActionFor(item, "publish", comment="Content automatically published by migrationScript")
+            
+            # Commit transaction
+            transaction.commit()
+            
+            result = True
+            self.created = self.created + 1
+            print("== Organization created ==")
+            
+        except:
+            self.errors = self.errors + 1
+            print "Unexpected error on createOrganization (" +obj.name+ "):", sys.exc_info()[1]
+            transaction.abort()
+            return result
+        
+        if not result:
+            self.skipped = self.skipped + 1
+            print("Skipped item: " + obj.name)
+        return result
+
+    def migrateTest(self):
+        row = self.csvDoc.next()
+        self.fields.append(row.keys())
+        return
+    
+    def migrateToEvent(self):
+        for row in self.csvDoc:
+            currentEvent = EventItem()
+            if "ID" in row.keys():
+                currentEvent.id = row["ID"]
+            if "internalID" in row.keys():
+                currentEvent.IID = row["internalID"]
+            if "Name" in row.keys():
+                currentEvent.title = row["Name"]
+            if "Description" in row.keys():
+                currentEvent.description = row["Description"].replace("\n", "<br />")
+            if "Weblink" in row.keys():
+                currentEvent.description = '%s <br /> <a src="%s">%s</a>'%(currentEvent.description, row["Weblink"], row["Weblink"])
+            if "Event Type Name" in row.keys():
+                currentEvent.tags.append(row["Event Type Name"])
+            if "Event Sub Type" in row.keys():
+                currentEvent.tags.append(row["Event Sub Type"])
+            if "Start Date" in row.keys() and row["Start Date"] != '':
+                try:
+                    currentEvent.startDate = DateTime(datetime.datetime.strptime(row["Start Date"], "%b %m, %Y"))
+                except:
+                    try:
+                        currentEvent.startDate = DateTime(datetime.datetime.strptime(row["Start Date"], "%d/%m/%Y"))
+                    except:
+                        try:
+                            currentEvent.startDate = DateTime(datetime.datetime.strptime(row["Start Date"], "%d-%m-%Y"))
+                        except:
+                            currentEvent.startDate = None 
+            else:
+                currentEvent.startDate = None
+                    
+            if "End Date" in row.keys() and row["End Date"] != '':
+                try:
+                    currentEvent.endDate = DateTime(datetime.datetime.strptime(row["End Date"], "%b %m, %Y"))
+                except:
+                    try:
+                        currentEvent.endDate = DateTime(datetime.datetime.strptime(row["End Date"], "%d/%m/%Y"))
+                    except:
+                        try:
+                            currentEvent.endDate = DateTime(datetime.datetime.strptime(row["End Date"], "%d-%m-%Y"))
+                        except:
+                            currentEvent.endDate = None 
+            else:
+                currentEvent.endDate = None  
+                
+            self.createEvent(currentEvent)
+        return
+    
+    def migrateToPerson(self):
+        for row in self.csvDoc:
+            if row['Agent Type Name'] == 'person':
+                currentObject = PersonItem()
+            else:
+                currentObject = OrganizationItem()
+                
+            if "ID" in row.keys():
+                currentObject.id = row["ID"]
+            if "internalID" in row.keys():
+                currentObject.IID = row["internalID"]
+            if "Displayname" in row.keys():
+                currentObject.name = unicode(row["Displayname"], "utf-8", errors='ignore')
+            if "Description" in row.keys():
+                currentObject.description = row["Description"]
+            if "Profile" in row.keys() and row["Profile"] != "":
+                currentObject.body = "<p>%s</p>"%row["Profile"]
+            if "Biography" in row.keys() and row["Biography"] != "":
+                currentObject.body = '%s  <br /><p>%s</p></a>'%(currentObject.body, row["Biography"])
+            if "Webpage" in row.keys() and row["Webpage"] != "":
+                currentObject.body = '%s <br /> <p><a src="%s">%s</a></p>'%(currentObject.body, row["Webpage"], row["Webpage"])
+                
+            if "Role" in row.keys() and row["Role"] != "":
+                currentObject.tags.append(row["Role"])
+
+            if "Born" in row.keys() and row["Born"] != '':
+                try:
+                    currentObject.born = DateTime(datetime.datetime.strptime(row["Born"], "%Y-00-00"))
+                except:
+                    try:
+                        currentObject.born = DateTime(datetime.datetime.strptime(row["Born"], "%d/%m/%Y"))
+                    except:
+                        try:
+                            currentObject.born = DateTime(datetime.datetime.strptime(row["Born"], "%d-%m-%Y"))
+                        except:
+                            print("Date %s did not match any of the formats"%row["Born"])
+                            currentObject.born = None 
+            else:
+                currentObject.born = None
+                    
+            if "Died" in row.keys() and row["Died"] != '':
+                try:
+                    currentObject.died = DateTime(datetime.datetime.strptime(row["Died"], "%Y-00-00"))
+                except:
+                    try:
+                        currentObject.died = DateTime(datetime.datetime.strptime(row["Died"], "%Y/%m/%d"))
+                    except:
+                        try:
+                            currentObject.died = DateTime(datetime.datetime.strptime(row["Died"], "%Y-%m-%d"))
+                        except:
+                            print("Date %s did not match any of the formats"%row["Died"])
+                            currentObject.died = None 
+            else:
+                currentObject.born = None
+                
+            if row['Agent Type Name'] == 'person':
+                self.createPerson(currentObject)
+            else:
+                self.createOrganization(currentObject)
+            
+        return
+    
+    def startMigration(self):
+        if self.portal is not None:
+            if self.typeToCreate == "Test":
+                self.migrateTest()
+                for f in self.fields:
+                    print f
+            elif self.typeToCreate == "MediaEvent":
+                self.migrateToEvent()
+            elif self.typeToCreate == "Person":
+                self.migrateToPerson()
+            else:
+                print("No migration is implemented for this type! ==>> " + self.typeToCreate)
+            
+            self.cleanUp()
+        else:
+            print ("Portal is NONE!!!")
+            self.cleanUp()
+        return

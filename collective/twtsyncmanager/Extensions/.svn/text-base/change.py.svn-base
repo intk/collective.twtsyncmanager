@@ -1,0 +1,13 @@
+
+
+from Products.CMFCore.utils import getToolByName
+
+
+def change(self):
+	catalog = getToolByName(self, 'portal_catalog')
+	results = catalog.searchResults({'portal_type': 'Object'})
+
+	for result in results:
+		ob = result.getObject()
+		ob.licence = u'<a href="http://creativecommons.org/licenses/by-nc-sa/3.0/nl/"> CC by-nc-sa </a>'
+
