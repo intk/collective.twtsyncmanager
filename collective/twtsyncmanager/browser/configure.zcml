@@ -7,7 +7,7 @@
     <browser:page
         name="sync_performance"
         for="collective.behavior.performance.behavior.IPerformance"
-        class=".views.SyncSinglePerformance"
+        class=".views.SyncPerformanceAvailability"
         permission="cmf.ManagePortal"
   	/>
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 
 class Error(Exception):
@@ -44,3 +45,40 @@ class ResponseHandlingError(Error):
 class PerformanceNotFoundError(Error):
     """Errors related to handling the response from the API."""
     pass
+
+# 
+# Error handling
+#
+def _raise_request_setup_error(message):
+    raise RequestSetupError(message)
+
+def _raise_request_error(message):
+    raise RequestError(message)
+
+def _raise_unknown_error(message):
+    raise UnkownError(message)
+
+def _raise_response_handling_error(message):
+    raise ResponseHandlingError(message)
+
+def _raise_performance_not_found_error(message):
+    raise PerformanceNotFoundError(message)
+
+def raise_error(error_type, message):
+    switcher = {
+        'requestSetupError': _raise_request_setup_error,
+        'requestError': _raise_request_error,
+        'requestHandlingError': _raise_response_handling_error,
+        'performanceNotFoundError': _raise_performance_not_found_error
+    }
+
+    error_handler = switcher.get(error_type, None)
+
+    if error_handler:
+        error_handler(message)
+    else:
+        _raise_unknown_error(message)
+
+
+
+

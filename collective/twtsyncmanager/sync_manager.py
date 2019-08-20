@@ -17,8 +17,8 @@ from datetime import datetime
 
 # Product dependencies
 from collective.behavior.performance.behavior import IPerformance
-from .error import RequestError, RequestSetupError, ResponseHandlingError, PerformanceNotFoundError, UnkownError, ValidationError
-
+from .error import raise_error
+from .logging import logger
 
 class SyncManager(object):
     #
@@ -41,19 +41,27 @@ class SyncManager(object):
     # CRUD operations
     #
     def update_performance(self, performance_id):
-        try:
-            resp = self.twt_api.get_performance_availability(performance_id)
-            if 'performance' in resp:
-                performance_data = resp['performance']
-                performance = self.find_performance(performance_id)
-                updated_performance = self.update_all_fields(performance, performance_data)
-                return updated_performance
-            else:
-                self.logger("[Error] performance is not found in the API JSON response. ID: %s" %(performance_id), "Invalid API response.")
-                raise ResponseHandlingError('Performance is not found in the API JSON response')
-        except Exception as err:
-            self.logger("[Error] Cannot update the performance ID: %s" %(performance_id), err)
-            raise
+        resp = self.twt_api.get_performance_availability(performance_id)
+        if 'performance' in resp:
+            performance_data = resp['performance']
+            performance = self.find_performance(performance_id)
+            updated_performance = self.update_all_fields(performance, performance_data)
+            return updated_performance
+        else:
+            logger("[Error] Performance is not found in the API JSON response. ID: %s" %(performance_id), "Invalid API response.")
+            raise_error('responseHandlingError', 'Performance is not found in the API JSON response.')
+
+    def update_performance_list(self, date_from, date_until):
+        performance_list = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
+
+        for performance in performance_list:
+            performane_id = performance.get('id', '')
+            try:
+                performance_data = self.update_performance(performance_id=performance_id)
+            except Exception as err:
+                logger("[Error] Error while requesting the sync for the performance ID: %s" %(performance_id), err)
+        
+        return performance_list
 
     def unpublish_performance(self, performance_id):
         ## TODO
@@ -74,6 +82,7 @@ class SyncManager(object):
     #
     # CRUS utils
     # 
+
     def find_performance(self, performance_id):
         result = plone.api.content.find(performance_id=performance_id)
         if result:
@@ -87,11 +96,11 @@ class SyncManager(object):
             if self.CORE[field]:
                 return self.CORE[field]
             else:
-                self.logger("[Warning] API field '%s' is ignored in the fields mapping" %(field), "Field ignored in mapping.")
+                logger("[Warning] API field '%s' is ignored in the fields mapping" %(field), "Field ignored in mapping.")
                 return False
         else:
             # log field not match
-            self.logger("[Error] API field '%s' does not exist in the fields mapping" %(field), "Field not found in mapping.")
+            logger("[Error] API field '%s' does not exist in the fields mapping" %(field), "Field not found in mapping.")
             return False
 
     def update_field(self, performance, fieldname, fieldvalue):
@@ -99,7 +108,7 @@ class SyncManager(object):
         if plonefield_match:
             try:
                 if not hasattr(performance, plonefield_match):
-                    self.logger("[Error] Plone field '%s' does not exist" %(plonefield_match), "Plone field not found")
+                    logger("[Error] Plone field '%s' does not exist" %(plonefield_match), "Plone field not found")
                     return None
 
                 if plonefield_match:
@@ -112,7 +121,7 @@ class SyncManager(object):
                 else:
                     return False
             except Exception as err:
-                self.logger("[Error] Exception while syncing the API field '%s'" %(fieldname), err)
+                logger("[Error] Exception while syncing the API field '%s'" %(fieldname), err)
                 return None
         else:
             return None
@@ -157,7 +166,7 @@ class SyncManager(object):
             richvalue = RichTextValue("", 'text/html', 'text/html')
             setattr(performance, fieldname, richvalue)
         else:
-            self.logger("[Error] Field '%s' type is not recognised. " %(fieldname), "Field cannot be cleaned before sync.")
+            logger("[Error] Field '%s' type is not recognised. " %(fieldname), "Field cannot be cleaned before sync.")
 
         return performance
 
@@ -171,7 +180,7 @@ class SyncManager(object):
             return True
         
         if not startDateTime and not endDateTime:
-            self.logger("[Error] There are no dates for the performance. ", "Performance dates cannot be found.")
+            logger("[Error] There are no dates for the performance. ", "Performance dates cannot be found.")
             return False
 
         return True
@@ -183,7 +192,7 @@ class SyncManager(object):
             transaction.get().commit()
             return performance
         else:
-            self.logger("[Error] Performance is not valid. Do not commit changes to the database.", "Performance is not valid.")
+            logger("[Error] Performance is not valid. Do not commit changes to the database.", "Performance is not valid.")
             return False
 
     #
@@ -252,22 +261,22 @@ class SyncManager(object):
         if prices:
             if len(prices) > 1:
                 if not multiple_ranks:
-                    final_value = "<h4>Prijzen</h4>"
+                    final_value = "<strong>Prijzen</strong>"
 
                 for price in prices:
                     priceTypeDescription = price.get('priceTypeDescription', '')
                     price_value = price.get('price', '')
                     currency = self._transform_currency(price.get('currency', u'€'))
-                    final_value += "<p>%s %s%s</p>" %(priceTypeDescription, currency, price_value)
+                    final_value += "<span>%s %s%s</span>" %(priceTypeDescription, currency, price_value)
                 return final_value
             elif len(prices) == 1:
                 if not multiple_ranks:
-                    final_value = "<h4>Prijs</h4>"
+                    final_value = "<strong>Prijs</strong>"
 
                 price = prices[0]
                 price_value = price.get('price', '')
                 currency = self._transform_currency(price.get('currency', u'€'))
-                final_value += "<p>%s%s</p>" %(currency, price_value)
+                final_value += "<span>%s%s</span>" %(currency, price_value)
                 return final_value
             else:
                 return ""
@@ -278,7 +287,7 @@ class SyncManager(object):
 
         html_value = ""
         if len(fieldvalue) > 1:
-            html_value = "<h4>Prijzen</h4>"
+            html_value = "<strong>Prijzen</strong>"
             for rank in fieldvalue:
                 rankDescription = rank.get('rankDescription')
                 prices = self._transform_ranks_generate_prices(rank, True)
