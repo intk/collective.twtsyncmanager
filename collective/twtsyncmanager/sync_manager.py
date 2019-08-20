@@ -17,7 +17,7 @@ from datetime import datetime
 
 # Product dependencies
 from collective.behavior.performance.behavior import IPerformance
-from .error import RequestError, RequestSetupError, ResponseHandlingError, PerformanceNotFoundError, UnkownError
+from .error import RequestError, RequestSetupError, ResponseHandlingError, PerformanceNotFoundError, UnkownError, ValidationError
 
 
 class SyncManager(object):
@@ -49,8 +49,8 @@ class SyncManager(object):
                 updated_performance = self.update_all_fields(performance, performance_data)
                 return updated_performance
             else:
-                self.logger("[Error] performance is not found in the APIs response. ID: %s" %(performance_id), "Invalid API response.")
-                return None
+                self.logger("[Error] performance is not found in the API JSON response. ID: %s" %(performance_id), "Invalid API response.")
+                raise ResponseHandlingError('Performance is not found in the API JSON response')
         except Exception as err:
             self.logger("[Error] Cannot update the performance ID: %s" %(performance_id), err)
             raise
@@ -112,14 +112,14 @@ class SyncManager(object):
                 else:
                     return False
             except Exception as err:
-                self.logger("[Error] Exception while syncing the API field %s" %(fieldname), err)
+                self.logger("[Error] Exception while syncing the API field '%s'" %(fieldname), err)
                 return None
         else:
             return None
 
     def update_all_fields(self, performance, performance_data):
         self.clean_all_fields(performance)
-        supdated_fields = [(self.update_field(performance, field, performance_data[field]), field) for field in performance_data.keys()]
+        updated_fields = [(self.update_field(performance, field, performance_data[field]), field) for field in performance_data.keys()]
         performance = self.validate_performance_data(performance, performance_data)
         return performance
 
@@ -169,17 +169,22 @@ class SyncManager(object):
             performance_date_fields = IEventAccessor(performance)
             performance_date_fields.end = performance_date_fields.start
             return True
+        
         if not startDateTime and not endDateTime:
-            self.logger("[Error] There are no dates the performance. ", "Performance dates cannot be found.")
+            self.logger("[Error] There are no dates for the performance. ", "Performance dates cannot be found.")
             return False
 
         return True
 
     def validate_performance_data(self, performance, performance_data):
-        self.validate_dates(performance, performance_data)
-        performance.reindexObject()
-        transaction.get().commit()
-        return performance
+        validated = self.validate_dates(performance, performance_data)
+        if validated:
+            performance.reindexObject()
+            transaction.get().commit()
+            return performance
+        else:
+            self.logger("[Error] Performance is not valid. Do not commit changes to the database.", "Performance is not valid.")
+            return False
 
     #
     # Transform special fields
@@ -230,21 +235,39 @@ class SyncManager(object):
     def _transform_tags(self, performance, fieldname, fieldvalue):
         return fieldvalue
 
-    def _transform_ranks_generate_prices(self, rank):
+    def _transform_currency(self, currency):
+        currencies = {
+            "EUR": u'€'
+        }
+
+        if currency in currencies:
+            return currencies[currency]
+        else:
+            return currency
+
+    def _transform_ranks_generate_prices(self, rank, multiple_ranks=False):
         prices = rank.get('prices', '')
         final_value = ""
 
         if prices:
             if len(prices) > 1:
+                if not multiple_ranks:
+                    final_value = "<h4>Prijzen</h4>"
+
                 for price in prices:
-                    priceTypeDescription = price['priceTypeDescription']
-                    price_value = price['price']
-                    final_value += "<li>%s %s</li>" %(priceTypeDescription, price_value)
+                    priceTypeDescription = price.get('priceTypeDescription', '')
+                    price_value = price.get('price', '')
+                    currency = self._transform_currency(price.get('currency', u'€'))
+                    final_value += "<p>%s %s%s</p>" %(priceTypeDescription, currency, price_value)
                 return final_value
             elif len(prices) == 1:
+                if not multiple_ranks:
+                    final_value = "<h4>Prijs</h4>"
+
                 price = prices[0]
-                price_value = price['price']
-                final_value += "<li>%s</li>" %(price_value)
+                price_value = price.get('price', '')
+                currency = self._transform_currency(price.get('currency', u'€'))
+                final_value += "<p>%s%s</p>" %(currency, price_value)
                 return final_value
             else:
                 return ""
@@ -254,19 +277,21 @@ class SyncManager(object):
     def _transform_ranks(self, performance, fieldname, fieldvalue):
 
         html_value = ""
-
         if len(fieldvalue) > 1:
+            html_value = "<h4>Prijzen</h4>"
             for rank in fieldvalue:
-                rankDescription = rank['rankDescription']
-                prices = self._transform_ranks_generate_prices(rank)
-                html_value += "<p>%s</p><ul>%s</ul>" %(rankDescription, prices)
-            setattr(performance, 'price', html_value)
+                rankDescription = rank.get('rankDescription')
+                prices = self._transform_ranks_generate_prices(rank, True)
+                html_value += "<h6>%s</h6><div>%s</div>" %(rankDescription, prices)
+            final_value = RichTextValue(html_value, 'text/html', 'text/html')
+            setattr(performance, 'price', final_value)
 
         elif len(fieldvalue) == 1:
             rank = fieldvalue[0]
             prices = self._transform_ranks_generate_prices(rank)
-            html_value += "<ul>%s</ul>" %(prices)
-            setattr(performance, 'price', html_value)
+            html_value += "<div>%s</div>" %(prices)
+            final_value = RichTextValue(html_value, 'text/html', 'text/html')
+            setattr(performance, 'price', final_value)
         else:
             return fieldvalue
             

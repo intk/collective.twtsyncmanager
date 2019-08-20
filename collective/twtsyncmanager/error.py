@@ -28,6 +28,10 @@ class UnkownError(Error):
     """Errors while preparing or performing an API request."""
     pass
 
+class ValidationError(Error):
+    """Errors while preparing or performing an API request."""
+    pass
+
 class RequestSetupError(RequestError):
     """Errors while preparing an API request."""
     pass
