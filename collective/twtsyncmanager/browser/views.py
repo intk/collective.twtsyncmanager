@@ -14,7 +14,8 @@ from zope.component import getUtility
 #
 from collective.twtsyncmanager.controlpanel import ITWTControlPanel
 from collective.twtsyncmanager.utils import get_api_settings, get_datetime_today, get_datetime_future
-from collective.twtsyncmanager.error import raise_error, logger
+from collective.twtsyncmanager.error import raise_error
+from collective.twtsyncmanager.logging import logger
 
 #
 # Performance List sync

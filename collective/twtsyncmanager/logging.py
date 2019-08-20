@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
-
 def log_csv(message, err):
 	return ""
 

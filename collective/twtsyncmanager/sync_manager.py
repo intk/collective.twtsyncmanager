@@ -24,18 +24,13 @@ class SyncManager(object):
     #
     # Init methods 
     # 
+    DEFAULT_CONTENT_TYPE = "Event"
+
     def __init__(self, options):
         self.options = options
         self.twt_api = self.options['api']
         self.CORE = self.options['core']
         self.fields_schema = getFieldsInOrder(IPerformance)
-    #
-    # Global methods
-    #
-    def logger(self, message, err):
-        ## TODO: log into CSV
-        ## TODO: log into Sentry
-        print "%s. Exception message: %s" %(message, err)
 
     #
     # CRUD operations
@@ -64,20 +59,37 @@ class SyncManager(object):
         return performance_list
 
     def unpublish_performance(self, performance_id):
-        ## TODO
-        pass
+        result = plone.api.content.find(performance_id=performance_id)
+        if result:
+            obj = result[0].getObject()
+            plone.api.content.transition(obj=obj, to_state="private")
+        else:
+            raise_error("performanceNotFoundError", "Performance with ID '%s' is not found in Plone" %(performance_id))
 
     def delete_performance(self, performance_id):
-        ## TODO
-        pass
+        result = plone.api.content.find(performance_id=performance_id)
+        if result:
+            obj = result[0].getObject()
+            plone.api.content.delete(obj=obj)
+        else:
+            raise_error("performanceNotFoundError", "Performance with ID '%s' is not found in Plone" %(performance_id))
 
     def create_performance(self, performance_data):
         ## TODO
         pass
 
-    def get_all_events(self, date_from):
-        ## TODO
-        pass
+    def get_all_upcoming_events(self):
+        today = datetime.today()
+        results = self.get_all_events(date_from=today)
+        return results
+
+    def get_all_events(self, date_from=None):
+        if date_from:
+            results = plone.api.content.find(portal_type=self.DEFAULT_CONTENT_TYPE, start={'query': date_from, 'range': 'min'})
+            return results
+        else:
+            results = plone.api.content.find(portal_type=self.DEFAULT_CONTENT_TYPE)
+            return results
 
     #
     # CRUS utils
@@ -88,7 +100,7 @@ class SyncManager(object):
         if result:
             return result[0].getObject()
         else:
-            raise PerformanceNotFoundError("Performance with ID '%s' is not found in Plone" %(performance_id))
+            raise_error("performanceNotFoundError", "Performance with ID '%s' is not found in Plone" %(performance_id))
 
     def match(self, field):
         # Find match in the core
@@ -110,16 +122,12 @@ class SyncManager(object):
                 if not hasattr(performance, plonefield_match):
                     logger("[Error] Plone field '%s' does not exist" %(plonefield_match), "Plone field not found")
                     return None
-
-                if plonefield_match:
-                    transform_value = self.transform_special_fields(performance, fieldname, fieldvalue)
-                    if transform_value:
-                        return transform_value
-                    else:
-                        setattr(performance, plonefield_match, self.safe_value(fieldvalue))
-                        return fieldvalue
+                transform_value = self.transform_special_fields(performance, fieldname, fieldvalue)
+                if transform_value:
+                    return transform_value
                 else:
-                    return False
+                    setattr(performance, plonefield_match, self.safe_value(fieldvalue))
+                    return fieldvalue
             except Exception as err:
                 logger("[Error] Exception while syncing the API field '%s'" %(fieldname), err)
                 return None
