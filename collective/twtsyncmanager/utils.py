@@ -49,3 +49,7 @@ def get_datetime_future(as_string=False, years=20):
         return date_future
     else:
         return future
+
+def str2bool(value):
+    return str(value).lower() in ("yes", "true", "t", "1")
+

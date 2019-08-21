@@ -18,6 +18,13 @@
         permission="cmf.ManagePortal"
     />
 
+    <browser:page
+        name="hourly_sync"
+        for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+        class=".views.SyncHourlyView"
+        permission="cmf.ManagePortal"
+    />
+
   	<browser:page
 	    name="twtapi-controlpanel"
 	    for="Products.CMFPlone.interfaces.IPloneSiteRoot"

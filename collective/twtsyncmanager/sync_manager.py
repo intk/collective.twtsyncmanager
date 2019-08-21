@@ -19,6 +19,7 @@ from datetime import datetime
 from collective.behavior.performance.behavior import IPerformance
 from .error import raise_error
 from .logging import logger
+from .utils import str2bool
 
 class SyncManager(object):
     #
@@ -46,6 +47,18 @@ class SyncManager(object):
         performance_list = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
         self.update_performance_list(performance_list)
         return performance_list
+
+    def update_availability_by_date(self, date_from, date_until):
+        website_performances = self.get_all_events(date_from=date_from)
+        api_performances = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
+        updated_availability = self.update_availability(api_performances, website_performances)
+        return updated_availability
+
+    def update_availability(self, api_performances, website_performances):
+        performances_data = self.build_performances_data_dict(api_performances)
+        availability_changed_list = [performance_brain for performance_brain in website_performances if self.is_availability_changed(performance_brain, self.get_performance_data_from_list_by_id(performance_brain, performances_data))]
+        updated_availability = [self.update_availability_field(performance_brain, performances_data[performance_brain.performance_id]) for performance_brain in availability_changed_list]
+        return updated_availability
         
     #
     # CRUD operations
@@ -99,6 +112,56 @@ class SyncManager(object):
     #
     # CRUD utils
     # 
+    def get_performance_data_from_list_by_id(self, performance_brain, performances_data):
+        performance_id = getattr(performance_brain, 'performance_id', None)
+        if performance_id and performance_id in performances_data:
+            return performances_data[performance_id]
+        else:
+            logger("[Error] Performance data for '%s' cannot be found." %(performance_brain.getURL()), "requestHandlingError")
+            return None
+
+    def build_performances_data_dict(self, api_performances):
+        performances_data = {}
+        for api_performance in api_performances:
+            if 'id' in api_performance:
+                performances_data[self.safe_value(api_performance['id'])] = api_performance
+            else:
+                logger('[Error] Performance ID cannot be found in the API JSON: %s' %(api_performance), 'requestHandlingError')
+        return performances_data
+
+    def update_availability_field(self, performance_brain, performance_data):
+        performance = performance_brain.getObject()
+        availability_fields = ['onsale', 'performanceStatus', 'statusMessage']
+        for field in availability_fields:
+            try:
+                setattr(performance, field, performance_data[field])
+            except Exception as err:
+                logger("[Error] Availability field '%s' cannot be updated.", err)
+
+        performance.reindexObject()
+        transaction.get().commit()
+        logger("[Status] Performance availability is now updated for ID: %s" %(performance_brain.performance_id))
+        return performance_brain
+
+    def is_availability_changed(self, performance_brain, performance_data):
+        ## TODO needs refactoring 
+        current_onsale_value = str2bool(performance_brain.onsale)
+        if performance_data and 'onsale' in performance_data:
+            performance_data_onsale_value = performance_data['onsale']
+            if performance_data_onsale_value != current_onsale_value:
+                logger('[Status] Availability field is changed for the performance ID: %s.' %(performance_brain.performance_id))
+                return True
+            else:
+                logger('[Status] Availability field is NOT changed for the performance ID: %s.' %(performance_brain.performance_id))
+                return False
+        elif not performance_data:
+            return False
+        else:
+            if getattr(performance_brain, 'performance_id', None):
+                logger("[Error] Performance 'onsale' field is not available for the ID '%s'." %(performance_brain.performance_id), 'requestHandlingError')
+            else:
+                return False
+
     def find_performance(self, performance_id):
         performance_id = self.safe_value(performance_id)
         result = plone.api.content.find(performance_id=performance_id)
@@ -122,6 +185,7 @@ class SyncManager(object):
 
     def update_field(self, performance, fieldname, fieldvalue):
         plonefield_match = self.match(fieldname)
+
         if plonefield_match:
             try:
                 if not hasattr(performance, plonefield_match):
@@ -149,7 +213,9 @@ class SyncManager(object):
     # Sanitising/validation methods
     #
     def safe_value(self, fieldvalue):
-        if isinstance(fieldvalue, int):
+        if isinstance(fieldvalue, bool):
+            return fieldvalue
+        elif isinstance(fieldvalue, int):
             fieldvalue_safe = "%s" %(fieldvalue)
             return fieldvalue_safe
         else:

@@ -16,6 +16,83 @@ from collective.twtsyncmanager.utils import get_api_settings, get_datetime_today
 from collective.twtsyncmanager.error import raise_error
 from collective.twtsyncmanager.logging import logger
 
+
+def test_sync_performance_list():
+
+    # Get API settings from the controlpanel
+    api_settings = get_api_settings()
+
+    # Create the API connection
+    api_connection = APIConnection(api_settings)
+
+    # Create the settings for the sync
+    # Initiate the sync manager
+    sync_options = {"api": api_connection, 'core': SYNC_CORE}
+    sync_manager = SyncManager(sync_options)
+
+    dateFrom = get_datetime_today(as_string=True)
+    dateUntil = get_datetime_future(as_string=True)
+
+    performance_list = sync_manager.update_performance_list_by_date(date_from=dateFrom, date_until=dateUntil)
+    return performance_list
+
+
+def test_update_availability():
+
+    # Get API settings from the controlpanel
+    api_settings = get_api_settings()
+
+    # Create the API connection
+    api_connection = APIConnection(api_settings)
+
+    # Create the settings for the sync
+    # Initiate the sync manager
+    sync_options = {"api": api_connection, 'core': SYNC_CORE}
+    sync_manager = SyncManager(sync_options)
+
+    dateFrom = get_datetime_today(as_string=True)
+    dateUntil = get_datetime_future(as_string=True)
+
+    performance_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil)
+    return performance_list
+
+
+#
+# Performance hourly sync
+#
+class SyncHourlyView(BrowserView):
+
+    def __call__(self):
+        return self.sync()
+
+    def sync(self):
+        redirect_url = self.context.absolute_url()
+        messages = IStatusMessage(self.request)
+
+        # Get API settings from the controlpanel
+        api_settings = get_api_settings()
+
+        # Create the API connection
+        api_connection = APIConnection(api_settings)
+
+        # Create the settings for the sync
+        # Initiate the sync manager
+        sync_options = {"api": api_connection, 'core': SYNC_CORE}
+        sync_manager = SyncManager(sync_options)
+
+        dateFrom = get_datetime_today(as_string=True)
+        dateUntil = get_datetime_future(as_string=True)
+
+        try:
+            performance_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil)
+            messages.add(u"Performances availability is now synced.", type=u"info")
+        except Exception as err:
+            logger("[Error] Error while requesting the sync for the performances availability.", err)
+            messages.add(u"Performances availability failed to sync with the api. Please contact the website administrator.", type=u"error")
+
+        raise Redirect(redirect_url)
+
+
 #
 # Performance List sync
 #
@@ -50,7 +127,6 @@ class SyncPerformanceListView(BrowserView):
             messages.add(u"Performance list failed to sync with the api. Please contact the website administrator.", type=u"error")
 
         raise Redirect(redirect_url)
-
 
 #
 # Performance Availability
