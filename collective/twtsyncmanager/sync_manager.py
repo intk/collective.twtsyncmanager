@@ -32,47 +32,52 @@ class SyncManager(object):
         self.CORE = self.options['core']
         self.fields_schema = getFieldsInOrder(IPerformance)
 
+
+    #
+    # Sync operations
+    #
+    def update_performance_by_id(self, performance_id):
+        performance = self.find_performance(performance_id)
+        performance_data = self.twt_api.get_performance_availability(performance_id)
+        updated_performance = self.update_performance(performance_id, performance, performance_data)
+        return updated_performance
+
+    def update_performance_list_by_date(self, date_from, date_until):
+        performance_list = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
+        self.update_performance_list(performance_list)
+        return performance_list
+        
     #
     # CRUD operations
     #
-    def update_performance(self, performance_id):
-        resp = self.twt_api.get_performance_availability(performance_id)
-        if 'performance' in resp:
-            performance_data = resp['performance']
-            performance = self.find_performance(performance_id)
-            updated_performance = self.update_all_fields(performance, performance_data)
-            return updated_performance
-        else:
-            logger("[Error] Performance is not found in the API JSON response. ID: %s" %(performance_id), "Invalid API response.")
-            raise_error('responseHandlingError', 'Performance is not found in the API JSON response.')
+    def update_performance(self, performance_id, performance, performance_data):
+        updated_performance = self.update_all_fields(performance, performance_data)
+        logger("[Status] Performance with ID '%s' is now updated. URL: %s" %(performance_id, performance.absolute_url()))
+        return updated_performance
 
-    def update_performance_list(self, date_from, date_until):
-        performance_list = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
-
+    def update_performance_list(self, performance_list):
         for performance in performance_list:
-            performane_id = performance.get('id', '')
+            performance_id = performance.get('id', '')
             try:
-                performance_data = self.update_performance(performance_id=performance_id)
+                performance_data = self.update_performance_by_id(performance_id=performance_id)
             except Exception as err:
                 logger("[Error] Error while requesting the sync for the performance ID: %s" %(performance_id), err)
         
         return performance_list
 
-    def unpublish_performance(self, performance_id):
-        result = plone.api.content.find(performance_id=performance_id)
-        if result:
-            obj = result[0].getObject()
-            plone.api.content.transition(obj=obj, to_state="private")
-        else:
-            raise_error("performanceNotFoundError", "Performance with ID '%s' is not found in Plone" %(performance_id))
+    def unpublish_performance(self, performance):
+        plone.api.content.transition(obj=performance, to_state="private")
 
-    def delete_performance(self, performance_id):
-        result = plone.api.content.find(performance_id=performance_id)
-        if result:
-            obj = result[0].getObject()
-            plone.api.content.delete(obj=obj)
-        else:
-            raise_error("performanceNotFoundError", "Performance with ID '%s' is not found in Plone" %(performance_id))
+    def delete_performance(self, performance):
+        plone.api.content.delete(obj=performance)
+
+    def unpublish_performance_by_id(self, performance_id):
+        obj = self.find_performance(performance_id=performance_id)
+        self.unpublish_performance(obj)
+
+    def delete_performance_by_id(self, performance_id):
+        obj = self.find_performance(performance_id=performance_id)
+        self.delete_performance(obj)
 
     def create_performance(self, performance_data):
         ## TODO
@@ -92,10 +97,10 @@ class SyncManager(object):
             return results
 
     #
-    # CRUS utils
+    # CRUD utils
     # 
-
     def find_performance(self, performance_id):
+        performance_id = self.safe_value(performance_id)
         result = plone.api.content.find(performance_id=performance_id)
         if result:
             return result[0].getObject()
@@ -200,8 +205,7 @@ class SyncManager(object):
             transaction.get().commit()
             return performance
         else:
-            logger("[Error] Performance is not valid. Do not commit changes to the database.", "Performance is not valid.")
-            return False
+            raise_error("validationError", "Performance is not valid. Do not commit changes to the database.")
 
     #
     # Transform special fields

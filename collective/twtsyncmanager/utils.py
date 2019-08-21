@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from Products.Five import BrowserView
-from collective.twtsyncmanager.api_connection import APIConnection
-from collective.twtsyncmanager.sync_manager import SyncManager
-from collective.twtsyncmanager.mapping_core import CORE as SYNC_CORE
-from Products.statusmessages.interfaces import IStatusMessage
-from zExceptions import Redirect
+
 from plone.registry.interfaces import IRegistry
 from zope.component import getUtility
 from collective.twtsyncmanager.controlpanel import ITWTControlPanel
+from datetime import datetime, timedelta
+
+#
+# Common definitions
+#
+ONE_YEAR = 365
+DATE_FORMAT = "%Y-%m-%d"
 
 def get_api_settings():
     registry = getUtility(IRegistry)
@@ -29,12 +31,21 @@ def get_api_settings():
     return api_settings
 
 
-def get_datetime_today():
-    ## TODO
+def get_datetime_today(as_string=False):
     ## format = YYYY-MM-DD
-    return ""
+    today = datetime.today()
+    if as_string:
+        return today.strftime(DATE_FORMAT)
+    else:
+        return today
 
-def get_datetime_future(years=20):
-    ## TODO
+def get_datetime_future(as_string=False, years=20):
     ## format = YYYY-MM-DD
-    return ""
+    today = datetime.today()
+    time_leap = years*ONE_YEAR
+    future = today + timedelta(days=time_leap)
+    if as_string:
+        date_future = future.strftime(DATE_FORMAT)
+        return date_future
+    else:
+        return future

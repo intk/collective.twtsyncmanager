@@ -11,6 +11,7 @@ import re
 import requests
 import sys
 from datetime import datetime
+from .utils import DATE_FORMAT
 
 try:
     from urllib.parse import urlencode
@@ -115,7 +116,11 @@ class APIConnection(object):
         #
         params = {"id": performance_id}
         response = self.perform_api_call(self.HTTP_METHOD, endpoint_type='availability', params=params)
-        return response
+        if 'performance' in response:
+            response_data = response['performance']
+            return response_data
+        else:
+            raise_error('responseHandlingError', 'Performance is not found in the API JSON response. ID: %s' %(performance_id))
 
     # 
     # Validaton methods
@@ -163,7 +168,7 @@ class APIConnection(object):
     def validate_date(self, date):
         # Valid date: yyyy-mm-dd
         try:
-            datetime_date = datetime.strptime(date, '%Y-%m-%d')
+            datetime_date = datetime.strptime(date, DATE_FORMAT)
             return date
         except:
             raise_error("requestSetupError", "The date '%s' is not valid. Date format: yyyy-mm-dd" %(date))

@@ -18,14 +18,19 @@ CORE = {
 	"percentageTaken": "percentageTaken",
 	"startDateTime": "start",
 	"endDateTime": "end",
-	"code": "",
-	"facilityCode": "",
+	"ranks":"price",
+
+	#
+	# Ignore these fields
+	# Fields that are exported in the API that do not need to be synced
+	#
+	"arrangements": "",
 	"event": "",
 	"end": "",
 	"start": "",
 	"satellite":"",
 	"facilityAddressLines":"",
 	"date":"",
-	"ranks":"price",
-	"arrangements": ""
+	"code": "",
+	"facilityCode": ""
 }

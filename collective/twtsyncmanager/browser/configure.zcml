@@ -7,9 +7,16 @@
     <browser:page
         name="sync_performance"
         for="collective.behavior.performance.behavior.IPerformance"
-        class=".views.SyncPerformanceAvailability"
+        class=".views.SyncPerformanceAvailabilityView"
         permission="cmf.ManagePortal"
   	/>
+
+    <browser:page
+        name="sync_performance_list"
+        for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+        class=".views.SyncPerformanceListView"
+        permission="cmf.ManagePortal"
+    />
 
   	<browser:page
 	    name="twtapi-controlpanel"

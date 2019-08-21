@@ -12,7 +12,6 @@ from zope.component import getUtility
 #
 # Product dependencies
 #
-from collective.twtsyncmanager.controlpanel import ITWTControlPanel
 from collective.twtsyncmanager.utils import get_api_settings, get_datetime_today, get_datetime_future
 from collective.twtsyncmanager.error import raise_error
 from collective.twtsyncmanager.logging import logger
@@ -20,7 +19,7 @@ from collective.twtsyncmanager.logging import logger
 #
 # Performance List sync
 #
-class SyncPerformanceList(BrowserView):
+class SyncPerformanceListView(BrowserView):
 
     def __call__(self):
         return self.sync()
@@ -40,11 +39,11 @@ class SyncPerformanceList(BrowserView):
         sync_options = {"api": api_connection, 'core': SYNC_CORE}
         sync_manager = SyncManager(sync_options)
 
-        dateFrom = get_datetime_today()
-        dateUntil = get_datetime_future()
+        dateFrom = get_datetime_today(as_string=True)
+        dateUntil = get_datetime_future(as_string=True)
 
         try:
-            performance_list = sync_manager.update_performance_list(date_from=dateFrom, date_until=dateUntil)
+            performance_list = sync_manager.update_performance_list_by_date(date_from=dateFrom, date_until=dateUntil)
             messages.add(u"Performance list is now synced.", type=u"info")
         except Exception as err:
             logger("[Error] Error while requesting the sync for the performance list.", err)
@@ -56,7 +55,7 @@ class SyncPerformanceList(BrowserView):
 #
 # Performance Availability
 #
-class SyncPerformanceAvailability(BrowserView):
+class SyncPerformanceAvailabilityView(BrowserView):
 
     def __call__(self):
         return self.sync()
@@ -82,7 +81,7 @@ class SyncPerformanceAvailability(BrowserView):
                 sync_manager = SyncManager(sync_options)
                 
                 # Trigger the sync to update one performance
-                performance_data = sync_manager.update_performance(performance_id=context_performance_id)
+                performance_data = sync_manager.update_performance_by_id(performance_id=context_performance_id)
                 messages.add(u"Performance ID %s is now synced." %(context_performance_id), type=u"info")
             except Exception as err:
                 logger("[Error] Error while requesting the sync for the performance ID: %s" %(context_performance_id), err)

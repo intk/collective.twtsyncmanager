@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
+from .logging import logger
 
 class Error(Exception):
     """Base exception."""
@@ -55,6 +56,9 @@ def _raise_request_setup_error(message):
 def _raise_request_error(message):
     raise RequestError(message)
 
+def _raise_validation_error(message):
+    raise ValidationError(message)
+
 def _raise_unknown_error(message):
     raise UnkownError(message)
 
@@ -69,11 +73,13 @@ def raise_error(error_type, message):
         'requestSetupError': _raise_request_setup_error,
         'requestError': _raise_request_error,
         'requestHandlingError': _raise_response_handling_error,
-        'performanceNotFoundError': _raise_performance_not_found_error
+        'performanceNotFoundError': _raise_performance_not_found_error,
+        'validationError': _raise_validation_error
     }
 
     error_handler = switcher.get(error_type, None)
 
+    logger("[Error] %s" %(message), error_type)
     if error_handler:
         error_handler(message)
     else:
