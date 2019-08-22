@@ -14,18 +14,21 @@ from plone.app.textfield.value import RichTextValue
 from zope.schema import getFieldsInOrder
 from plone.event.interfaces import IEventAccessor
 from datetime import datetime
+from zope.component import getUtility
+from plone.i18n.normalizer.interfaces import IIDNormalizer
 
 # Product dependencies
 from collective.behavior.performance.behavior import IPerformance
 from .error import raise_error
 from .logging import logger
-from .utils import str2bool
+from .utils import str2bool, normalize_id
 
 class SyncManager(object):
     #
     # Init methods 
     # 
     DEFAULT_CONTENT_TYPE = "Event"
+    DEFAULT_FOLDER = "/programma"
 
     def __init__(self, options):
         self.options = options
@@ -48,18 +51,30 @@ class SyncManager(object):
         self.update_performance_list(performance_list)
         return performance_list
 
-    def update_availability_by_date(self, date_from, date_until):
+    def update_availability_by_date(self, date_from, date_until, create_new=False):
         website_performances = self.get_all_events(date_from=date_from)
         api_performances = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
-        updated_availability = self.update_availability(api_performances, website_performances)
-        return updated_availability
-
-    def update_availability(self, api_performances, website_performances):
+        
         performances_data = self.build_performances_data_dict(api_performances)
+        updated_availability = self.update_availability(performances_data, website_performances)
+        created_performances = []
+
+        if create_new:
+            website_data = self.build_website_data_dict(website_performances)
+            created_performances = self.create_new_performances(performances_data, website_data)
+
+        return updated_availability, created_performances
+
+    def update_availability(self, performances_data, website_performances):
         availability_changed_list = [performance_brain for performance_brain in website_performances if self.is_availability_changed(performance_brain, self.get_performance_data_from_list_by_id(performance_brain, performances_data))]
         updated_availability = [self.update_availability_field(performance_brain, performances_data[performance_brain.performance_id]) for performance_brain in availability_changed_list]
         return updated_availability
         
+    def create_new_performances(self, performances_data, website_data):
+        new_performances = [api_id for api_id in performances_data.keys() if api_id not in website_data.keys()]
+        created_performances = [self.create_performance(performance_id) for performance_id in new_performances]
+        return new_performances
+
     #
     # CRUD operations
     #
@@ -67,6 +82,23 @@ class SyncManager(object):
         updated_performance = self.update_all_fields(performance, performance_data)
         logger("[Status] Performance with ID '%s' is now updated. URL: %s" %(performance_id, performance.absolute_url()))
         return updated_performance
+
+    def create_performance(self, performance_id):
+        performance_data = self.twt_api.get_performance_availability(performance_id)
+        
+        try:
+            title = performance_data['title']
+            description = performane_data.get('subtitle', '')
+            new_performance_id = normalize_id(title)
+            container = self.get_container()
+            new_performance = plone.api.content.create(container=container, type=self.DEFAULT_CONTENT_TYPE, id=new_performance_id, safe_id=True, title=title, description=description)
+            logger("[Status] Performance with ID '%s' is now created. URL: %s" %(performance_id, new_performance.absolute_url()))
+            
+            updated_performance = self.update_performance(performance_id, new_performance, performance_data)
+            self.publish_performance(updated_performance)
+        except Exception as err:
+            logger("[Error] Error while creating the performance ID '%s'" %(performance_id), err)
+            return None
 
     def update_performance_list(self, performance_list):
         for performance in performance_list:
@@ -81,6 +113,9 @@ class SyncManager(object):
     def unpublish_performance(self, performance):
         plone.api.content.transition(obj=performance, to_state="private")
 
+    def publish_performance(self, performance):
+        plone.api.content.transition(obj=performance, to_state="published")
+
     def delete_performance(self, performance):
         plone.api.content.delete(obj=performance)
 
@@ -90,11 +125,7 @@ class SyncManager(object):
 
     def delete_performance_by_id(self, performance_id):
         obj = self.find_performance(performance_id=performance_id)
-        self.delete_performance(obj)
-
-    def create_performance(self, performance_data):
-        ## TODO
-        pass
+        self.delete_performance(obj)    
 
     def get_all_upcoming_events(self):
         today = datetime.today()
@@ -128,6 +159,17 @@ class SyncManager(object):
             else:
                 logger('[Error] Performance ID cannot be found in the API JSON: %s' %(api_performance), 'requestHandlingError')
         return performances_data
+
+    def build_website_data_dict(self, website_performances):
+        website_performances_data = {}
+        for website_performance in website_performances:
+            performance_id = getattr(website_performance, 'performance_id', None)
+            if performance_id:
+                website_performances_data[self.safe_value(performance_id)] = website_performance
+            else:
+                logger('[Error] Performance ID value cannot be found in the brain url: %s' %(website_performance.getURL()), 'requestHandlingError')
+        return website_performances_data
+
 
     def update_availability_field(self, performance_brain, performance_data):
         performance = performance_brain.getObject()
@@ -209,6 +251,10 @@ class SyncManager(object):
         performance = self.validate_performance_data(performance, performance_data)
         return performance
 
+    def get_container(self):
+        container = plone.api.content.get(path=self.DEFAULT_FOLDER)
+        return container
+
     #
     # Sanitising/validation methods
     #
@@ -280,8 +326,11 @@ class SyncManager(object):
     def transform_special_fields(self, performance, fieldname, fieldvalue):
         special_field_handler = self.get_special_fields_handlers(fieldname)
         if special_field_handler:
-            special_field_value = special_field_handler(performance, fieldname, fieldvalue)
-            return special_field_value
+            if fieldvalue:
+                special_field_value = special_field_handler(performance, fieldname, fieldvalue)
+                return special_field_value
+            else:
+                return fieldvalue
         return False
 
     def get_special_fields_handlers(self, fieldname):
@@ -341,11 +390,23 @@ class SyncManager(object):
                 if not multiple_ranks:
                     final_value = "<strong>Prijzen</strong>"
 
+                default_prices = []
+                available_prices = []
+
                 for price in prices:
                     priceTypeDescription = price.get('priceTypeDescription', '')
                     price_value = price.get('price', '')
+                    is_default_price = price.get('isDefault', '')
                     currency = self._transform_currency(price.get('currency', u'€'))
-                    final_value += "<span>%s %s%s</span>" %(priceTypeDescription, currency, price_value)
+                    new_price = "<span>%s %s%s</span>" %(priceTypeDescription, currency, price_value)
+
+                    if is_default_price:
+                        default_prices.append(new_price)
+                    else:
+                        available_prices.append(new_price)
+                        
+                generated_prices = default_prices+available_prices
+                final_value += "".join(generated_prices)
                 return final_value
             elif len(prices) == 1:
                 if not multiple_ranks:

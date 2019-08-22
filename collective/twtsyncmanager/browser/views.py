@@ -53,8 +53,13 @@ def test_update_availability():
     dateFrom = get_datetime_today(as_string=True)
     dateUntil = get_datetime_future(as_string=True)
 
-    performance_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil)
-    return performance_list
+    logger("[Status] Start hourly sync test.")
+    performance_list, created_performances = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil, create_new=True)
+    logger("[Status] Finished hourly sync test.")
+
+    print "Total performances to be created: %s" %(len(created_performances))
+    print "Total performances to update availability: %s" %(len(performance_list))
+    return performance_list, created_performances
 
 
 #
@@ -84,7 +89,9 @@ class SyncHourlyView(BrowserView):
         dateUntil = get_datetime_future(as_string=True)
 
         try:
-            performance_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil)
+            logger("[Status] Start hourly sync.")
+            update_availability_list, created_performances_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil, create_new=True)
+            logger("[Status] Finished hourly sync.")
             messages.add(u"Performances availability is now synced.", type=u"info")
         except Exception as err:
             logger("[Error] Error while requesting the sync for the performances availability.", err)
@@ -120,7 +127,9 @@ class SyncPerformanceListView(BrowserView):
         dateUntil = get_datetime_future(as_string=True)
 
         try:
+            logger("[Status] Start syncing performance list.")
             performance_list = sync_manager.update_performance_list_by_date(date_from=dateFrom, date_until=dateUntil)
+            logger("[Status] Syncing performance list finished.")
             messages.add(u"Performance list is now synced.", type=u"info")
         except Exception as err:
             logger("[Error] Error while requesting the sync for the performance list.", err)
@@ -157,7 +166,9 @@ class SyncPerformanceAvailabilityView(BrowserView):
                 sync_manager = SyncManager(sync_options)
                 
                 # Trigger the sync to update one performance
+                logger("[Status] Start update of single performance.")
                 performance_data = sync_manager.update_performance_by_id(performance_id=context_performance_id)
+                logger("[Status] Finished update of single performance.")
                 messages.add(u"Performance ID %s is now synced." %(context_performance_id), type=u"info")
             except Exception as err:
                 logger("[Error] Error while requesting the sync for the performance ID: %s" %(context_performance_id), err)
