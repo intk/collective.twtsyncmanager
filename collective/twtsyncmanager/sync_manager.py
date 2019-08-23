@@ -36,7 +36,6 @@ class SyncManager(object):
         self.CORE = self.options['core']
         self.fields_schema = getFieldsInOrder(IPerformance)
 
-
     #
     # Sync operations
     #
@@ -65,16 +64,6 @@ class SyncManager(object):
 
         return updated_availability, created_performances
 
-    def update_availability(self, performances_data, website_performances):
-        availability_changed_list = [performance_brain for performance_brain in website_performances if self.is_availability_changed(performance_brain, self.get_performance_data_from_list_by_id(performance_brain, performances_data))]
-        updated_availability = [self.update_availability_field(performance_brain, performances_data[performance_brain.performance_id]) for performance_brain in availability_changed_list]
-        return updated_availability
-        
-    def create_new_performances(self, performances_data, website_data):
-        new_performances = [api_id for api_id in performances_data.keys() if api_id not in website_data.keys()]
-        created_performances = [self.create_performance(performance_id) for performance_id in new_performances]
-        return new_performances
-
     #
     # CRUD operations
     #
@@ -99,6 +88,16 @@ class SyncManager(object):
         except Exception as err:
             logger("[Error] Error while creating the performance ID '%s'" %(performance_id), err)
             return None
+
+    def update_availability(self, performances_data, website_performances):
+        availability_changed_list = [performance_brain for performance_brain in website_performances if self.is_availability_changed(performance_brain, self.get_performance_data_from_list_by_id(performance_brain, performances_data))]
+        updated_availability = [self.update_availability_field(performance_brain, performances_data[performance_brain.performance_id]) for performance_brain in availability_changed_list]
+        return updated_availability
+        
+    def create_new_performances(self, performances_data, website_data):
+        new_performances = [api_id for api_id in performances_data.keys() if api_id not in website_data.keys()]
+        created_performances = [self.create_performance(performance_id) for performance_id in new_performances]
+        return new_performances
 
     def update_performance_list(self, performance_list):
         for performance in performance_list:
