@@ -19,7 +19,7 @@
     />
 
     <browser:page
-        name="hourly_sync"
+        name="sync_availability"
         for="Products.CMFPlone.interfaces.IPloneSiteRoot"
         class=".views.SyncPerformancesAvailability"
         permission="cmf.ManagePortal"

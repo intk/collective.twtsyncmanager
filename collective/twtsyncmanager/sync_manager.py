@@ -63,7 +63,7 @@ class SyncManager(object):
         performances_data = self.build_performances_data_dict(api_performances)
         updated_availability = self.update_availability(performances_data, website_performances)
 
-        return updated_availability, created_performances
+        return updated_availability
 
     #
     # CRUD operations

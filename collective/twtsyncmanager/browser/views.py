@@ -39,7 +39,7 @@ def test_sync_performance_list():
         return performance_list
 
 
-def test_update_availability():
+def test_sync_availability():
     with plone.api.env.adopt_user(username="admin"):
         # Get API settings from the controlpanel
         api_settings = get_api_settings()
@@ -55,9 +55,9 @@ def test_update_availability():
         dateFrom = get_datetime_today(as_string=True)
         dateUntil = get_datetime_future(as_string=True)
 
-        logger("[Status] Start hourly sync test.")
-        performance_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil, create_new=True)
-        logger("[Status] Finished hourly sync test.")
+        logger("[Status] Start availability sync test.")
+        synced_availability_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil, create_new=True)
+        logger("[Status] Finished availability sync test.")
         print "Total performances to update availability: %s" %(len(performance_list))
         return performance_list
 
@@ -89,9 +89,9 @@ class SyncPerformancesAvailability(BrowserView):
         dateUntil = get_datetime_future(as_string=True)
 
         try:
-            logger("[Status] Start hourly sync.")
-            update_availability_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil)
-            logger("[Status] Finished hourly sync.")
+            logger("[Status] Start availability sync.")
+            synced_availability_list = sync_manager.update_availability_by_date(date_from=dateFrom, date_until=dateUntil)
+            logger("[Status] Finished availability sync.")
             messages.add(u"Performances availability is now synced.", type=u"info")
         except Exception as err:
             logger("[Error] Error while requesting the sync for the performances availability.", err)
