@@ -84,7 +84,6 @@ class SyncManager(object):
             logger("[Status] Performance with ID '%s' is now created. URL: %s" %(performance_id, new_performance.absolute_url()))
             
             updated_performance = self.update_performance(performance_id, new_performance, performance_data)
-            self.publish_performance(updated_performance)
         except Exception as err:
             logger("[Error] Error while creating the performance ID '%s'" %(performance_id), err)
             return None

@@ -7,21 +7,21 @@
     <browser:page
         name="sync_performance"
         for="collective.behavior.performance.behavior.IPerformance"
-        class=".views.SyncPerformanceAvailabilityView"
+        class=".views.SyncPerformance"
         permission="cmf.ManagePortal"
   	/>
 
     <browser:page
         name="sync_performance_list"
         for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-        class=".views.SyncPerformanceListView"
+        class=".views.SyncPerformancesList"
         permission="cmf.ManagePortal"
     />
 
     <browser:page
         name="hourly_sync"
         for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-        class=".views.SyncHourlyView"
+        class=".views.SyncPerformancesAvailability"
         permission="cmf.ManagePortal"
     />
 

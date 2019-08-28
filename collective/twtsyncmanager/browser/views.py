@@ -65,7 +65,7 @@ def test_update_availability():
 #
 # Performance hourly sync
 #
-class SyncHourlyView(BrowserView):
+class SyncPerformancesAvailability(BrowserView):
 
     def __call__(self):
         return self.sync()
@@ -103,7 +103,7 @@ class SyncHourlyView(BrowserView):
 #
 # Performance List sync
 #
-class SyncPerformanceListView(BrowserView):
+class SyncPerformancesList(BrowserView):
 
     def __call__(self):
         return self.sync()
@@ -140,7 +140,7 @@ class SyncPerformanceListView(BrowserView):
 #
 # Performance Availability
 #
-class SyncPerformanceAvailabilityView(BrowserView):
+class SyncPerformance(BrowserView):
 
     def __call__(self):
         return self.sync()
