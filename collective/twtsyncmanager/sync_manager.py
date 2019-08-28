@@ -45,9 +45,15 @@ class SyncManager(object):
         updated_performance = self.update_performance(performance_id, performance, performance_data)
         return updated_performance
 
-    def update_performance_list_by_date(self, date_from, date_until):
+    def update_performance_list_by_date(self, date_from, date_until, create_and_unpublish=False):
         performance_list = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
-        self.update_performance_list(performance_list)
+        
+        if create_and_unpublish:
+            website_performances = self.get_all_events(date_from=date_from)
+            self.sync_performance_list(performance_list, website_performances)
+        else:
+            self.update_performance_list(performance_list)
+        
         return performance_list
 
     def update_availability_by_date(self, date_from, date_until, create_new=False):
@@ -56,11 +62,6 @@ class SyncManager(object):
         
         performances_data = self.build_performances_data_dict(api_performances)
         updated_availability = self.update_availability(performances_data, website_performances)
-        created_performances = []
-
-        if create_new:
-            website_data = self.build_website_data_dict(website_performances)
-            created_performances = self.create_new_performances(performances_data, website_data)
 
         return updated_availability, created_performances
 
@@ -77,12 +78,11 @@ class SyncManager(object):
         
         try:
             title = performance_data['title']
-            description = performane_data.get('subtitle', '')
+            description = performance_data.get('subtitle', '')
             new_performance_id = normalize_id(title)
             container = self.get_container()
             new_performance = plone.api.content.create(container=container, type=self.DEFAULT_CONTENT_TYPE, id=new_performance_id, safe_id=True, title=title, description=description)
             logger("[Status] Performance with ID '%s' is now created. URL: %s" %(performance_id, new_performance.absolute_url()))
-            
             updated_performance = self.update_performance(performance_id, new_performance, performance_data)
         except Exception as err:
             logger("[Error] Error while creating the performance ID '%s'" %(performance_id), err)
@@ -102,14 +102,39 @@ class SyncManager(object):
         for performance in performance_list:
             performance_id = performance.get('id', '')
             try:
-                performance_data = self.update_performance_by_id(performance_id=performance_id)
+                performance_data = self.update_performance_by_id(performance_id)
             except Exception as err:
                 logger("[Error] Error while requesting the sync for the performance ID: %s" %(performance_id), err)
         
         return performance_list
 
+    def sync_performance_list(self, performance_list, website_performances):
+
+        website_data = self.build_website_data_dict(website_performances)
+
+        for performance in performance_list:
+            performance_id = str(performance.get('id', ''))
+            if performance_id in website_data.keys():
+                consume_performance = website_data.pop(performance_id)
+                try:
+                    performance_data = self.update_performance_by_id(performance_id)
+                except Exception as err:
+                    logger("[Error] Error while updating the performance ID: %s" %(performance_id), err)
+            else:
+                try:
+                    new_performance = self.create_performance(performance_id)
+                except Exception as err:
+                    logger("[Error] Error while creating the performance ID: %s" %(performance_id), err)
+        
+        if len(website_data.keys()) > 0:
+            unpublished_performances = [self.unpublish_performance(performance_brain.getObject()) for performance_brain in website_data.values()]
+
+        return performance_list
+
     def unpublish_performance(self, performance):
         plone.api.content.transition(obj=performance, to_state="private")
+        logger("[Status] Unpublished performance with ID: '%s'" %(getattr(performance, 'performance_id', '')))
+        return performance
 
     def publish_performance(self, performance):
         plone.api.content.transition(obj=performance, to_state="published")

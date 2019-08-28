@@ -12,7 +12,7 @@
   	/>
 
     <browser:page
-        name="sync_performance_list"
+        name="sync_all_performances"
         for="Products.CMFPlone.interfaces.IPloneSiteRoot"
         class=".views.SyncPerformancesList"
         permission="cmf.ManagePortal"
