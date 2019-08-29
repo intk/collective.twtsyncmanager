@@ -29,6 +29,15 @@ class SyncManager(object):
     # 
     DEFAULT_CONTENT_TYPE = "Event"
     DEFAULT_FOLDER = "/programma"
+    AVAILABILITY_FIELDS = ['onsale', 'performanceStatus', 'statusMessage']
+    PERFORMANCE_STATUSES_TEXT = {
+        "ONSALE": "Bestellen",
+        "SOLDOUT": "Uitverkocht",
+        "CANCELLED": "Geanuleerd",
+        "ONHOLD": "Tijdelijk onbeschikbaar",
+        "NOSALE": "Geen tickets"
+    }
+    REDIRECT_URL = "https://hetpark.tst3.ticketworks.nl/mtTicket/performance"
 
     def __init__(self, options):
         self.options = options
@@ -196,12 +205,16 @@ class SyncManager(object):
 
     def update_availability_field(self, performance_brain, performance_data):
         performance = performance_brain.getObject()
-        availability_fields = ['onsale', 'performanceStatus', 'statusMessage']
-        for field in availability_fields:
+        for field in self.AVAILABILITY_FIELDS:
             try:
                 setattr(performance, field, performance_data[field])
             except Exception as err:
-                logger("[Error] Availability field '%s' cannot be updated.", err)
+                logger("[Error] Availability field '%s' cannot be updated for performance ID '%s'."%(field, performance_data.get('id', 'Unknown')), err)
+
+        try:
+            performance = self.generate_performance_availability_field(performance, performance_data)
+        except Exception as err:
+            logger("[Error] Performance availability field value cannot be updated for performance ID '%s'." %(performance_data.get('id', 'Unknown')), err)
 
         performance.reindexObject()
         transaction.get().commit()
@@ -271,6 +284,7 @@ class SyncManager(object):
     def update_all_fields(self, performance, performance_data):
         self.clean_all_fields(performance)
         updated_fields = [(self.update_field(performance, field, performance_data[field]), field) for field in performance_data.keys()]
+        performance = self.generate_performance_availability_field(performance, performance_data)
         performance = self.validate_performance_data(performance, performance_data)
         return performance
 
@@ -281,6 +295,67 @@ class SyncManager(object):
     #
     # Sanitising/validation methods
     #
+
+    def generate_performance_availability_field(self, performance, performance_data):
+        fieldvalue = self.generate_availability_html(performance_data)
+        setattr(performance, 'performance_availability', fieldvalue)
+        return performance
+
+    def generate_availability_html(self, performance_data):
+        performanceStatus = performance_data.get('performanceStatus', )
+        onsale = performance_data.get('onsale', '')
+        if performanceStatus:
+            if performanceStatus != "ONSALE":
+                availability_value = self.get_availability_html(performanceStatus, performance_data)
+                final_value = RichTextValue(availability_value, 'text/html', 'text/html')
+                return final_value
+            else:
+                if onsale == True:
+                    availability_value = self.get_availability_html(performanceStatus, performance_data)
+                    final_value = RichTextValue(availability_value, 'text/html', 'text/html')
+                    return final_value
+                elif onsale == False:
+                    final_value = RichTextValue("", 'text/html', 'text/html')
+                    return final_value
+                else:
+                    final_value = RichTextValue("", 'text/html', 'text/html')
+                    return final_value
+        else:
+            logger('[Error] Performance status is not available. Cannot update the availability field.', 'requestHandingError')
+            final_value = RichTextValue("", 'text/html', 'text/html')
+            return final_value
+
+    def get_availability_html(self, performanceStatus, performance_data):
+        field_text = self.get_availability_status_text(performanceStatus)
+        disabled_state = ""
+        if performanceStatus != "ONSALE":
+            disabled_state = "disabled"
+
+        if field_text:
+            if performanceStatus == "NOSALE":
+                availability_html = "<p>%s</p>" %(field_text)
+                return availability_html
+            elif performanceStatus != "ONSALE":
+                availability_html = "<a target='_blank' class='btn btn-default' %s>%s</a>" %(disabled_state, field_text)
+                return availability_html
+            else:
+                availability_html = "<a href='%s' target='_blank' class='btn btn-default' %s>%s</a>" %(self.get_redirect_url(performance_data), disabled_state, field_text)
+                return availability_html
+        else:
+            return ""
+
+    def get_availability_status_text(self, performanceStatus):
+        if performanceStatus in self.PERFORMANCE_STATUSES_TEXT:
+            return self.PERFORMANCE_STATUSES_TEXT[performanceStatus]
+        else:
+            return None
+
+    def get_redirect_url(self, performance_data):
+
+        performance_id = performance_data['id']
+        redirect_url = "%s/%s" %(self.REDIRECT_URL, str(performance_id))
+        return redirect_url
+
     def safe_value(self, fieldvalue):
         if isinstance(fieldvalue, bool):
             return fieldvalue
