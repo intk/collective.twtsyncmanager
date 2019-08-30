@@ -65,7 +65,7 @@ class SyncManager(object):
         
         return performance_list
 
-    def update_availability_by_date(self, date_from, date_until, create_new=False):
+    def update_availability_by_date(self, date_from, date_until):
         website_performances = self.get_all_events(date_from=date_from)
         api_performances = self.twt_api.get_performance_list_by_date(date_from=date_from, date_until=date_until)
         
