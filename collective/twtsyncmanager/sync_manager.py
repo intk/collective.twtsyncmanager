@@ -496,7 +496,7 @@ class SyncManager(object):
                     price_value = price.get('price', '')
                     is_default_price = price.get('isDefault', '')
                     currency = self._transform_currency(price.get('currency', u'€'))
-                    new_price = "<span>%s %s%s</span>" %(priceTypeDescription, currency, price_value)
+                    new_price = "<span><span class='price-type'>%s</span> %s%s</span>" %(priceTypeDescription, currency, price_value)
 
                     if is_default_price:
                         default_prices.append(new_price)
@@ -504,7 +504,7 @@ class SyncManager(object):
                         available_prices.append(new_price)
                         
                 generated_prices = default_prices+available_prices
-                final_value += "".join(generated_prices)
+                final_value += "<div class='list-prices'>"+"".join(generated_prices)+"</div>"
                 return final_value
             elif len(prices) == 1:
                 if not multiple_ranks:
