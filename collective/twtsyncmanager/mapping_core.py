@@ -19,13 +19,14 @@ CORE = {
 	"startDateTime": "start",
 	"endDateTime": "end",
 	"ranks":"price",
-
+	"event": "event",
+	
 	#
 	# Ignore these fields
 	# Fields that are exported in the API that do not need to be synced
 	#
 	"arrangements": "",
-	"event": "",
+	
 	"end": "",
 	"start": "",
 	"satellite":"",

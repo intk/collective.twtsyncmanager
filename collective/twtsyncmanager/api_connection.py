@@ -60,7 +60,8 @@ class APIConnection(object):
 
     ENDPOINTS = { # TODO: should get this from the settings
         "list": "performanceList",
-        "availability": "performanceAvailability"
+        "availability": "performanceAvailability",
+        "arrangements": "arrangementList"
     }
 
     #
@@ -104,6 +105,44 @@ class APIConnection(object):
             return response['performances']
         else:
             raise_error("requestHandlingError", "Performance list is not available in the TWT API response.")
+
+    def get_arrangement_list_by_date(self, date_from, date_until):
+        #
+        # Request the performance list from the Ticketworks API
+        # Requires: dateFrom and dateUntil in the format YYYY-MM-DD
+        #
+        date_from = self.validate_date(date_from)
+        date_until = self.validate_date(date_until)
+        
+        params = {"dateFrom": date_from, "dateUntil": date_until}
+        response = self.perform_api_call(self.HTTP_METHOD, endpoint_type='arrangements', params=params)
+
+        if 'products' in response:
+            return response['products']
+        else:
+            raise_error("requestHandlingError", "Arrangement list is not available in the TWT API response.")
+
+    def get_arrangement_list_by_performance_id(self, find_performance_id, date_from, date_until):
+        arrangement_list_response = self.get_arrangement_list_by_date(date_from=date_from, date_until=date_until)
+        arrangement_list = self.find_arrangements_by_performance_id(find_performance_id, arrangement_list_response)
+        return arrangement_list
+
+
+    def find_arrangements_by_performance_id(self, find_performance_id, arrangement_list_response):
+        arrangement_list = []
+        for product in arrangement_list_response:
+            product_arrangement_list = product.get('arrangements', [])
+            for arrangement in product_arrangement_list:
+                performance = arrangement.get('performance', None)
+                if performance:
+                    performance_id = performance.get('id', '')
+                    if str(performance_id) == str(find_performance_id):
+                        new_arrangement = arrangement
+                        new_arrangement['product_id'] = product.get('id', '')
+                        arrangement_list.append(new_arrangement)
+                        break
+
+        return arrangement_list
 
     def get_performance_list_by_season(self, season):
         ## TODO

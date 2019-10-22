@@ -61,6 +61,44 @@ def test_sync_availability():
         print "Total performances to update availability: %s" %(len(performance_list))
         return performance_list
 
+def test_api_arrangement_list_call():
+    with plone.api.env.adopt_user(username="admin"):
+        # Get API settings from the controlpanel
+        api_settings = get_api_settings()
+
+        # Create the API connection
+        api_connection = APIConnection(api_settings)
+
+        dateFrom = get_datetime_today(as_string=True)
+        dateUntil = get_datetime_future(as_string=True)
+
+        logger("[Status] Start api call test to get arrangement list.")
+        arrangement_list_response = api_connection.get_arrangement_list_by_date(date_from=dateFrom, date_until=dateUntil)
+        logger("[Status] Finished api call test to get arrangement list.")
+        
+
+        # find arrangements for performance 2869
+        find_performance_id = 2869
+        arrangement_list = []
+
+        for product in arrangement_list_response:
+            product_arrangement_list = product.get('arrangements', [])
+            for arrangement in product_arrangement_list:
+                performance = arrangement.get('performance', None)
+                if performance:
+                    performance_id = performance.get('id', '')
+                    if performance_id == find_performance_id:
+                        new_arrangement = arrangement
+                        new_arrangement['product_id'] = product.get('id', '')
+                        arrangement_list.append(new_arrangement)
+                        break
+
+        print arrangement_list
+        print "Total arrangments for performance ID '%s': %s" %(find_performance_id, len(arrangement_list))
+
+        return arrangement_list
+
+
 
 #
 # Performance hourly sync

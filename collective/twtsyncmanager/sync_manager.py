@@ -23,6 +23,8 @@ from .error import raise_error
 from .logging import logger
 from .utils import str2bool, normalize_id
 
+from collective.twtsyncmanager.utils import get_datetime_today, get_datetime_future
+
 class SyncManager(object):
     #
     # Init methods 
@@ -48,10 +50,15 @@ class SyncManager(object):
     #
     # Sync operations
     #
-    def update_performance_by_id(self, performance_id):
+    def update_performance_by_id(self, performance_id, arrangement_list=None):
         performance = self.find_performance(performance_id)
         performance_data = self.twt_api.get_performance_availability(performance_id)
-        updated_performance = self.update_performance(performance_id, performance, performance_data)
+
+        if not arrangement_list:
+            arrangement_list = self.twt_api.get_arrangement_list_by_performance_id(performance_id, date_from=get_datetime_today(as_string=True), date_until=get_datetime_future(as_string=True))
+
+        updated_performance = self.update_performance(performance_id, performance, performance_data, arrangement_list)
+
         return updated_performance
 
     def update_performance_list_by_date(self, date_from, date_until, create_and_unpublish=False):
@@ -77,8 +84,8 @@ class SyncManager(object):
     #
     # CRUD operations
     #
-    def update_performance(self, performance_id, performance, performance_data):
-        updated_performance = self.update_all_fields(performance, performance_data)
+    def update_performance(self, performance_id, performance, performance_data, arrangement_list=None):
+        updated_performance = self.update_all_fields(performance, performance_data, arrangement_list)
         logger("[Status] Performance with ID '%s' is now updated. URL: %s" %(performance_id, performance.absolute_url()))
         return updated_performance
 
@@ -281,10 +288,12 @@ class SyncManager(object):
         else:
             return None
 
-    def update_all_fields(self, performance, performance_data):
+    def update_all_fields(self, performance, performance_data, arrangement_list=None):
         self.clean_all_fields(performance)
         updated_fields = [(self.update_field(performance, field, performance_data[field]), field) for field in performance_data.keys()]
         performance = self.generate_performance_availability_field(performance, performance_data)
+        performance = self.generate_arrangement_list_field(performance, arrangement_list)
+
         performance = self.validate_performance_data(performance, performance_data)
         return performance
 
@@ -299,6 +308,11 @@ class SyncManager(object):
     def generate_performance_availability_field(self, performance, performance_data):
         fieldvalue = self.generate_availability_html(performance_data)
         setattr(performance, 'performance_availability', fieldvalue)
+        return performance
+
+    def generate_arrangement_list_field(self, performance, arrangement_list):
+        fieldvalue = self.generate_arrangement_list_html(arrangement_list)
+        setattr(performance, 'arrangements', fieldvalue)
         return performance
 
     def generate_availability_html(self, performance_data):
@@ -324,6 +338,21 @@ class SyncManager(object):
             logger('[Error] Performance status is not available. Cannot update the availability field.', 'requestHandingError')
             final_value = RichTextValue("", 'text/html', 'text/html')
             return final_value
+
+
+    def generate_arrangement_list_html(self, arrangement_list):
+        arrangements_html = [self.get_arrangement_html(arrangement) for arrangement in arrangement_list]
+        final_arrangements_list = "".join(arrangements_html)
+        final_value = RichTextValue(final_arrangements_list, 'text/html', 'text/html')
+        return final_value
+
+    def get_arrangement_html(self, arragement):
+        base_url = "https://hetpark.tst3.ticketworks.nl/mtTicket/performance"
+
+        title = arragement.get('shortTitle', '')
+        arrangement_id = arragement.get('id', '')
+        arrangement_html = "<a href='%s/%s' target='_blank'>%s</a>" %(base_url, arrangement_id, title)
+        return arrangement_html
 
     def get_availability_html(self, performanceStatus, performance_data):
         field_text = self.get_availability_status_text(performanceStatus)
