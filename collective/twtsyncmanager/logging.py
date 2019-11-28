@@ -5,19 +5,28 @@ print_warnings = False
 print_errors = True
 print_status = True
 
-def log_csv(message, err):
+def log_csv(message, err, timestamp):
     """
     Log format:
     datetime, type_error, message, exception
     """
+
+    """if '[Error]' in message:
+        pass
+    elif '[Warning]' in message:
+        pass
+    elif '[Status]' in message:
+        pass"""
+
     return ""
 
-def log_sentry(message, err):
+def log_sentry(message, err, timestamp):
     return ""
 
 def logger(message, err=""):
-    log_csv(message, err)
-    log_sentry(message, err)
+    timestamp = datetime.today().isoformat()
+    log_csv(message, err, timestamp)
+    log_sentry(message, err, timestamp)
 
     print_message = False
     if '[Error]' in message and print_errors:
@@ -31,7 +40,6 @@ def logger(message, err=""):
     else:
         print_message = False
 
-    timestamp = datetime.today().isoformat()
     if print_message:
         if '[Status]' not in message:
             print "[%s] %s Exception: %s" %(timestamp, message, err)

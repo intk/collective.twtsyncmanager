@@ -23,7 +23,7 @@ from .error import raise_error
 from .logging import logger
 from .utils import str2bool, normalize_id
 
-from collective.twtsyncmanager.utils import get_datetime_today, get_datetime_future
+from collective.twtsyncmanager.utils import get_datetime_today, get_datetime_future, DATE_FORMAT
 
 class SyncManager(object):
     #
@@ -173,6 +173,8 @@ class SyncManager(object):
 
     def get_all_events(self, date_from=None):
         if date_from:
+            if isinstance(date_from, str):
+                date_from = datetime.strptime(date_from, DATE_FORMAT)
             results = plone.api.content.find(portal_type=self.DEFAULT_CONTENT_TYPE, start={'query': date_from, 'range': 'min'})
             return results
         else:
@@ -254,6 +256,24 @@ class SyncManager(object):
             return result[0].getObject()
         else:
             raise_error("performanceNotFoundError", "Performance with ID '%s' is not found in Plone" %(performance_id))
+
+    def find_product_details_by_id(self, product_id, scale="mini"):
+        product_id = self.safe_value(product_id)
+        result = plone.api.content.find(product_id=product_id)
+        if result:
+            product_description = result[0].Description
+            lead_image_scale_url = ""
+            leadMedia = getattr(result[0], 'leadMedia', None)
+            if leadMedia:
+                images = plone.api.content.find(UID=leadMedia)
+                if images:
+                    lead_image = images[0]
+                    lead_image_url = lead_image.getURL()
+                    lead_image_scale_url = "%s/@@images/image/%s" %(lead_image_url, scale)
+            return lead_image_scale_url, product_description
+
+        else:
+            return "", ""
 
     def match(self, field):
         # Find match in the core
@@ -341,17 +361,29 @@ class SyncManager(object):
 
 
     def generate_arrangement_list_html(self, arrangement_list):
-        arrangements_html = [self.get_arrangement_html(arrangement) for arrangement in arrangement_list]
-        final_arrangements_list = "".join(arrangements_html)
-        final_value = RichTextValue(final_arrangements_list, 'text/html', 'text/html')
-        return final_value
+        if arrangement_list:
+            arrangements_html = [self.get_arrangement_html(arrangement) for arrangement in arrangement_list]
+            final_arrangements_list = "<h3>Arrangementen</h3>"
+            final_arrangements_list += "".join(arrangements_html)
+            final_value = RichTextValue(final_arrangements_list, 'text/html', 'text/html')
+            return final_value
+        else:
+            final_value = RichTextValue("", 'text/html', 'text/html')
+            return final_value
 
-    def get_arrangement_html(self, arragement):
-        base_url = "https://hetpark.tst3.ticketworks.nl/mtTicket/performance"
+    def get_arrangement_html(self, arrangement):
+        title = arrangement.get('shortTitle', '')
+        arrangement_id = arrangement.get('id', '')
+        product_id = arrangement.get('product_id', '')
+        image_url = ""
+        if product_id:
+            image_url, description = self.find_product_details_by_id(product_id)
 
-        title = arragement.get('shortTitle', '')
-        arrangement_id = arragement.get('id', '')
-        arrangement_html = "<a href='%s/%s' target='_blank'>%s</a>" %(base_url, arrangement_id, title)
+        if image_url:
+            arrangement_html = "<div class='arrangement-wrapper'><div class='arrangement-image'><a href='%s/%s'><img src='%s'/></a></div><div class='arrangement-details'><h4><a href='%s/%s'>%s</a><h4><p class='arrangement-description'>%s</p></div></div>" %(self.REDIRECT_URL, arrangement_id, image_url, self.REDIRECT_URL, arrangement_id, title, description)
+        else:
+            arrangement_html = "<div class='arrangement-wrapper'><div class='arrangement-details'><h4><a href='%s/%s'>%s</a></h4><p class='arrangement-description'>%s</p></div></div>" %(self.REDIRECT_URL, arrangement_id, title, description)
+        
         return arrangement_html
 
     def get_availability_html(self, performanceStatus, performance_data):
@@ -365,10 +397,10 @@ class SyncManager(object):
                 availability_html = "<p>%s</p>" %(field_text)
                 return availability_html
             elif performanceStatus != "ONSALE":
-                availability_html = "<a target='_blank' class='btn btn-default' %s>%s</a>" %(disabled_state, field_text)
+                availability_html = "<a class='btn btn-default' %s>%s</a>" %(disabled_state, field_text)
                 return availability_html
             else:
-                availability_html = "<a href='%s' target='_blank' class='btn btn-default' %s>%s</a>" %(self.get_redirect_url(performance_data), disabled_state, field_text)
+                availability_html = "<a href='%s' class='btn btn-default' %s>%s</a>" %(self.get_redirect_url(performance_data), disabled_state, field_text)
                 return availability_html
         else:
             return ""
@@ -398,7 +430,7 @@ class SyncManager(object):
 
         # get all fields from schema
         for fieldname, field in self.fields_schema:
-            if fieldname != 'performance_id':
+            if fieldname not in ['performance_id', 'waiting_list']:
                 self.clean_field(performance, fieldname, field)
             
         # extra fields that are not in the behavior
@@ -480,7 +512,13 @@ class SyncManager(object):
         return fieldvalue
 
     def _transform_event_genre(self, performance, fieldname, fieldvalue):
-        performance.setSubject([fieldvalue])
+        current_subjects = performance.Subject()
+        if 'frontpage-slideshow' in current_subjects:
+            subjects = ['frontpage-slideshow', fieldvalue]
+            performance.setSubject(subjects)
+        else:
+            performance.setSubject([fieldvalue])
+            
         return [fieldvalue]
 
     def _transform_start_date(self, performance, fieldname, fieldvalue):

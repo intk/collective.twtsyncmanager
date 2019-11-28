@@ -127,7 +127,7 @@ class APIConnection(object):
         arrangement_list = self.find_arrangements_by_performance_id(find_performance_id, arrangement_list_response)
         return arrangement_list
 
-
+    # TODO: Maybe move to the sync mechanism
     def find_arrangements_by_performance_id(self, find_performance_id, arrangement_list_response):
         arrangement_list = []
         for product in arrangement_list_response:
