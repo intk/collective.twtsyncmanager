@@ -17,6 +17,25 @@ from collective.twtsyncmanager.error import raise_error
 from collective.twtsyncmanager.logging import logger
 import plone.api
 
+def test_get_performances_future():
+    with plone.api.env.adopt_user(username="admin"):
+        # Get API settings from the controlpanel
+        api_settings = get_api_settings()
+
+        # Create the API connection
+        api_connection = APIConnection(api_settings)
+
+        # Create the settings for the sync
+        # Initiate the sync manager
+        sync_options = {"api": api_connection, 'core': SYNC_CORE}
+        sync_manager = SyncManager(sync_options)
+
+        all_upcoming_events = sync_manager.get_all_upcoming_events()
+
+        print "Total upcoming events in the website: %s" %(len(all_upcoming_events))
+
+        return None
+
 def test_sync_performance_list():
     with plone.api.env.adopt_user(username="admin"):
         # Get API settings from the controlpanel

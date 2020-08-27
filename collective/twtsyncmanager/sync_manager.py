@@ -35,11 +35,12 @@ class SyncManager(object):
     PERFORMANCE_STATUSES_TEXT = {
         "ONSALE": "Bestellen",
         "SOLDOUT": "Uitverkocht",
-        "CANCELLED": "Geanuleerd",
+        "CANCELLED": "Geannuleerd",
+        "AVAILABLESOON": "Binnenkort in verkoop",
         "ONHOLD": "Tijdelijk onbeschikbaar",
         "NOSALE": "Geen tickets"
     }
-    REDIRECT_URL = "https://hetpark.tst3.ticketworks.nl/mtTicket/performance"
+    REDIRECT_URL = "https://hetpark.podiumnederland.nl/mtTicket/performance"
 
     def __init__(self, options):
         self.options = options
@@ -233,6 +234,7 @@ class SyncManager(object):
     def is_availability_changed(self, performance_brain, performance_data):
         ## TODO needs refactoring 
         current_onsale_value = str2bool(performance_brain.onsale)
+        
         if performance_data and 'onsale' in performance_data:
             performance_data_onsale_value = performance_data['onsale']
             if performance_data_onsale_value != current_onsale_value:
@@ -338,6 +340,12 @@ class SyncManager(object):
     def generate_availability_html(self, performance_data):
         performanceStatus = performance_data.get('performanceStatus', )
         onsale = performance_data.get('onsale', '')
+        
+        now = datetime.now()
+        startDateTime = self.convert_string_to_datetime(performance_data.get('startDateTime', ''))
+        startOnlineSalesDate = self.convert_string_to_datetime(performance_data.get('startOnlineSalesDate', ''))
+        endOnlineSalesDate = self.convert_string_to_datetime(performance_data.get('endOnlineSalesDate', ''))
+
         if performanceStatus:
             if performanceStatus != "ONSALE":
                 availability_value = self.get_availability_html(performanceStatus, performance_data)
@@ -349,7 +357,18 @@ class SyncManager(object):
                     final_value = RichTextValue(availability_value, 'text/html', 'text/html')
                     return final_value
                 elif onsale == False:
-                    final_value = RichTextValue("", 'text/html', 'text/html')
+                    if now < startOnlineSalesDate:
+                        availability_value = self.get_availability_html("AVAILABLESOON", performance_data)
+                        final_value = RichTextValue(availability_value, 'text/html', 'text/html')
+                        return final_value
+                    elif now > startOnlineSalesDate and now < endOnlineSalesDate:
+                        availability_value = self.get_availability_html("SOLDOUT", performance_data)
+                        final_value = RichTextValue(availability_value, 'text/html', 'text/html')
+                        return final_value
+                    else:
+                        availability_value = self.get_availability_html("SOLDOUT", performance_data)
+                    
+                    final_value = RichTextValue(availability_value, 'text/html', 'text/html')
                     return final_value
                 else:
                     final_value = RichTextValue("", 'text/html', 'text/html')
@@ -412,9 +431,9 @@ class SyncManager(object):
             return None
 
     def get_redirect_url(self, performance_data):
-
+        endpoint_mode = "stlt=sbhp"
         performance_id = performance_data['id']
-        redirect_url = "%s/%s" %(self.REDIRECT_URL, str(performance_id))
+        redirect_url = "%s/%s?%s" %(self.REDIRECT_URL, str(performance_id), endpoint_mode)
         return redirect_url
 
     def safe_value(self, fieldvalue):
@@ -489,6 +508,8 @@ class SyncManager(object):
                 special_field_value = special_field_handler(performance, fieldname, fieldvalue)
                 return special_field_value
             else:
+                if fieldname in ['ranks']:
+                    return RichTextValue("", 'text/html', 'text/html')
                 return fieldvalue
         return False
 
@@ -535,6 +556,10 @@ class SyncManager(object):
 
     def _transform_tags(self, performance, fieldname, fieldvalue):
         return fieldvalue
+
+    def convert_string_to_datetime(self, datestring):
+        date_datetime = datetime.strptime(datestring, '%Y-%m-%d %H:%M')
+        return date_datetime
 
     def _transform_currency(self, currency):
         currencies = {
@@ -606,6 +631,8 @@ class SyncManager(object):
             final_value = RichTextValue(html_value, 'text/html', 'text/html')
             setattr(performance, 'price', final_value)
         else:
-            return fieldvalue
-            
-        return fieldvalue
+            html_value = ""
+            final_value = RichTextValue(html_value, 'text/html', 'text/html')
+            return final_value
+        final_value = RichTextValue(html_value, 'text/html', 'text/html')   
+        return final_value
